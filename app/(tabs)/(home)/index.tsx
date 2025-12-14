@@ -1,6 +1,6 @@
 
 import React, { useRef, useEffect } from "react";
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import { 
   ScrollView, 
   StyleSheet, 
@@ -23,7 +23,6 @@ const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scrollY = useRef(new Animated.Value(0)).current;
   
   const [fontsLoaded] = useFonts({
     Poppins_400Regular,
@@ -42,26 +41,13 @@ export default function HomeScreen() {
     }).start();
   }, []);
 
-  const headerScale = scrollY.interpolate({
-    inputRange: [0, 100],
-    outputRange: [1, 0.96],
-    extrapolate: 'clamp',
-  });
-
-  const headerOpacity = scrollY.interpolate({
-    inputRange: [0, 100],
-    outputRange: [1, 0.85],
-    extrapolate: 'clamp',
-  });
-
   if (loading || !fontsLoaded) {
     return (
       <>
         <Stack.Screen
           options={{
-            title: "JAXE Creator",
-            headerRight: () => <HeaderRightButton />,
-            headerLeft: () => <HeaderLeftButton />,
+            title: "JAXE One",
+            headerShown: false,
           }}
         />
         <View style={[styles.container, styles.centerContent]}>
@@ -77,9 +63,8 @@ export default function HomeScreen() {
       <>
         <Stack.Screen
           options={{
-            title: "JAXE Creator",
-            headerRight: () => <HeaderRightButton />,
-            headerLeft: () => <HeaderLeftButton />,
+            title: "JAXE One",
+            headerShown: false,
           }}
         />
         <View style={[styles.container, styles.centerContent]}>
@@ -103,111 +88,104 @@ export default function HomeScreen() {
 
   const fullName = `${creator.first_name} ${creator.last_name}`.trim() || creator.creator_handle;
   const profileImageUrl = creator.avatar_url || creator.profile_picture_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&h=200&fit=crop';
-  const creatorTypes = creator.creator_type || ['LIVE'];
   const region = creator.region || 'USA / Canada';
+  const language = creator.language || 'English';
 
   return (
     <>
       <Stack.Screen
         options={{
-          title: "JAXE Creator",
-          headerRight: () => <HeaderRightButton />,
-          headerLeft: () => <HeaderLeftButton />,
+          title: "JAXE One",
+          headerShown: false,
         }}
       />
       <View style={styles.container}>
-        <Animated.ScrollView
+        <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           bounces={true}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: true }
-          )}
-          scrollEventThrottle={16}
         >
-          <Animated.View 
-            style={[
-              styles.welcomeSection,
-              {
-                opacity: headerOpacity,
-                transform: [{ scale: headerScale }],
-              }
-            ]}
-          >
-            <View style={styles.profileRow}>
-              <View style={styles.profilePhotoContainer}>
-                <LinearGradient
-                  colors={colors.gradientPurple}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.profilePhotoGradient}
-                >
-                  <Image
-                    source={{ uri: profileImageUrl }}
-                    style={styles.profilePhoto}
-                  />
-                </LinearGradient>
-              </View>
-              <View style={styles.profileInfo}>
-                <Text style={styles.welcomeGreeting}>Hey there! 👋</Text>
-                <Text style={styles.welcomeTitle}>{fullName}</Text>
-                <Text style={styles.welcomeSubtitle}>Lifestyle & Vibes • LIVE Creator</Text>
-                <Text style={styles.tiktokHandle}>@{creator.creator_handle}</Text>
-                <View style={styles.badgeRow}>
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{region}</Text>
-                  </View>
-                  {creatorTypes.map((type, index) => (
-                    <LinearGradient
-                      key={index}
-                      colors={colors.gradientPurple}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.liveBadge}
-                    >
-                      <Text style={styles.liveBadgeText}>{type}</Text>
-                    </LinearGradient>
-                  ))}
+          <Animated.View style={{ opacity: fadeAnim }}>
+            {/* HEADER CARD */}
+            <LinearGradient
+              colors={['#FFFFFF', '#FAF5FF']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.headerCard}
+            >
+              <Image
+                source={{ uri: profileImageUrl }}
+                style={styles.headerAvatar}
+              />
+              <Text style={styles.headerGreeting}>Hello, {fullName}</Text>
+              <Text style={styles.headerHandle}>@{creator.creator_handle}</Text>
+              <View style={styles.headerBadges}>
+                <View style={styles.headerBadge}>
+                  <Text style={styles.headerBadgeText}>{region}</Text>
+                </View>
+                <View style={styles.headerBadge}>
+                  <Text style={styles.headerBadgeText}>{language}</Text>
                 </View>
               </View>
-            </View>
-          </Animated.View>
+            </LinearGradient>
 
-          <Animated.View style={{ opacity: fadeAnim }}>
-            <CardPressable onPress={() => console.log('Monthly Diamonds tapped')}>
-              <LinearGradient
-                colors={['#FFFFFF', '#FAF5FF']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.card, styles.heroCard]}
-              >
-                <View style={styles.heroContent}>
+            {/* DIAMONDS PROGRESS CARD */}
+            <CardPressable onPress={() => console.log('Diamonds tapped')}>
+              <View style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.cardEmoji}>💎</Text>
+                  <View style={styles.cardHeaderText}>
+                    <Text style={styles.cardTitleLarge}>Diamonds This Month</Text>
+                    <Text style={styles.cardSubtitle}>Resets every 1st of the month</Text>
+                  </View>
+                </View>
+                <Text style={styles.bigNumber}>{stats.monthlyDiamonds.toLocaleString()}</Text>
+                <View style={styles.progressBarContainer}>
                   <LinearGradient
                     colors={colors.gradientPurple}
                     start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.progressRing}
-                  >
-                    <View style={styles.progressRingInner}>
-                      <Text style={styles.diamondNumber}>{stats.monthlyDiamonds}</Text>
-                      <Text style={styles.diamondLabel}>💎</Text>
-                    </View>
-                  </LinearGradient>
-                  <Text style={styles.cardTitle}>Monthly Diamonds</Text>
-                  <Text style={styles.cardSubtext}>Resets every 1st of the month</Text>
+                    end={{ x: 1, y: 0 }}
+                    style={[styles.progressBarFill, { width: `${Math.min(stats.currentProgress, 100)}%` }]}
+                  />
                 </View>
-              </LinearGradient>
+                <Text style={styles.progressHint}>
+                  You need {stats.remaining.toLocaleString()} more diamonds to reach your next bonus
+                </Text>
+              </View>
             </CardPressable>
 
-            <CardPressable onPress={() => console.log('Next Graduation tapped')}>
+            {/* LIVE HOURS & VALID DAYS CARD */}
+            <CardPressable onPress={() => console.log('Live stats tapped')}>
               <View style={styles.card}>
                 <View style={styles.cardHeader}>
-                  <Text style={styles.cardEmoji}>🎯</Text>
+                  <Text style={styles.cardEmoji}>📊</Text>
                   <View style={styles.cardHeaderText}>
-                    <Text style={styles.cardTitleLarge}>Next Graduation</Text>
-                    <Text style={styles.cardSubtitle}>{stats.nextTarget} Level</Text>
+                    <Text style={styles.cardTitleLarge}>Live Activity</Text>
+                    <Text style={styles.cardSubtitle}>Last 30 days</Text>
+                  </View>
+                </View>
+                <View style={styles.statsRow}>
+                  <View style={styles.statBox}>
+                    <Text style={styles.statNumber}>{stats.liveHours}</Text>
+                    <Text style={styles.statLabel}>Live Hours</Text>
+                  </View>
+                  <View style={styles.statBox}>
+                    <Text style={styles.statNumber}>{stats.liveDays}</Text>
+                    <Text style={styles.statLabel}>Valid Days</Text>
+                  </View>
+                </View>
+              </View>
+            </CardPressable>
+
+            {/* GRADUATION STATUS CARD */}
+            <CardPressable onPress={() => console.log('Graduation tapped')}>
+              <View style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.cardEmoji}>🎓</Text>
+                  <View style={styles.cardHeaderText}>
+                    <Text style={styles.cardTitleLarge}>Graduation Status</Text>
+                    <Text style={styles.cardSubtitle}>{stats.currentStatus}</Text>
                   </View>
                 </View>
                 <View style={styles.progressBarContainer}>
@@ -218,246 +196,90 @@ export default function HomeScreen() {
                     style={[styles.progressBarFill, { width: `${Math.min(stats.currentProgress, 100)}%` }]}
                   />
                 </View>
-                <View style={styles.progressLabels}>
-                  <Text style={styles.progressLabel}>{stats.currentProgress}% Complete</Text>
-                  <Text style={styles.progressLabelBold}>{(stats.remaining / 1000).toFixed(0)}k to go</Text>
-                </View>
-                <View style={styles.milestoneInfo}>
-                  <View style={styles.milestoneRow}>
-                    <Text style={styles.milestoneText}>Current</Text>
-                    <Text style={styles.milestoneValue}>{(stats.totalDiamonds / 1000).toFixed(0)}k 💎</Text>
-                  </View>
-                  <View style={styles.milestoneRow}>
-                    <Text style={styles.milestoneText}>Target</Text>
-                    <Text style={styles.milestoneValue}>{(stats.targetAmount / 1000).toFixed(0)}k 💎</Text>
-                  </View>
-                </View>
+                <Text style={styles.progressHint}>
+                  You are {stats.currentProgress.toFixed(1)}% of the way to {stats.nextTarget}
+                </Text>
               </View>
             </CardPressable>
 
-            <CardPressable onPress={() => console.log('Missions tapped')}>
+            {/* BONUSES & CONTESTS SNAPSHOT CARD */}
+            <CardPressable onPress={() => router.push('/(tabs)/bonuses')}>
               <View style={styles.card}>
                 <View style={styles.cardHeader}>
-                  <Text style={styles.cardEmoji}>🚀</Text>
+                  <Text style={styles.cardEmoji}>💰</Text>
                   <View style={styles.cardHeaderText}>
-                    <Text style={styles.cardTitleLarge}>Missions</Text>
-                    <Text style={styles.cardSubtitle}>Keep the momentum going!</Text>
+                    <Text style={styles.cardTitleLarge}>Bonuses & Contests</Text>
+                    <Text style={styles.cardSubtitle}>Your earnings overview</Text>
                   </View>
                 </View>
-                <View style={styles.missionsGrid}>
-                  <View style={styles.missionColumn}>
-                    <LinearGradient
-                      colors={['#FEF3C7', '#FDE68A']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.missionIconContainer}
-                    >
-                      <Text style={styles.missionIcon}>🎓</Text>
-                    </LinearGradient>
-                    <Text style={styles.missionTitle}>Education</Text>
-                    <Text style={styles.missionProgress}>2 of 5</Text>
-                    <View style={styles.miniProgressBar}>
-                      <LinearGradient
-                        colors={colors.gradientSunset}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={[styles.miniProgressFill, { width: '40%' }]}
-                      />
-                    </View>
+                <View style={styles.statsRow}>
+                  <View style={styles.statBox}>
+                    <Text style={styles.statNumber}>$0</Text>
+                    <Text style={styles.statLabel}>Earned</Text>
                   </View>
-                  <View style={styles.missionColumn}>
-                    <LinearGradient
-                      colors={['#FEE2E2', '#FECACA']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.missionIconContainer}
-                    >
-                      <Text style={styles.missionIcon}>🔥</Text>
-                    </LinearGradient>
-                    <Text style={styles.missionTitle}>Challenge</Text>
-                    <Text style={styles.missionProgress}>7 of 21</Text>
-                    <View style={styles.miniProgressBar}>
-                      <LinearGradient
-                        colors={colors.gradientPink}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={[styles.miniProgressFill, { width: '33%' }]}
-                      />
-                    </View>
-                  </View>
-                  <View style={styles.missionColumn}>
-                    <LinearGradient
-                      colors={['#D1FAE5', '#A7F3D0']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.missionIconContainer}
-                    >
-                      <Text style={styles.missionIcon}>💵</Text>
-                    </LinearGradient>
-                    <Text style={styles.missionTitle}>Bonus</Text>
-                    <Text style={styles.bonusAmount}>$0.00</Text>
-                    <View style={styles.statusPill}>
-                      <Text style={styles.statusPillText}>Rising ↗</Text>
-                    </View>
+                  <View style={styles.statBox}>
+                    <Text style={styles.statNumber}>$0</Text>
+                    <Text style={styles.statLabel}>Pending</Text>
                   </View>
                 </View>
+                <Text style={styles.contestInfo}>No active contests</Text>
               </View>
             </CardPressable>
 
-            <CardPressable onPress={() => console.log('LIVE Activity tapped')}>
-              <View style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <Text style={styles.cardEmoji}>📊</Text>
-                  <View style={styles.cardHeaderText}>
-                    <Text style={styles.cardTitleLarge}>Your Stats</Text>
-                    <Text style={styles.cardSubtitle}>Last 30 days</Text>
-                  </View>
-                </View>
-                <View style={styles.statsGrid}>
-                  <LinearGradient
-                    colors={['#DBEAFE', '#BFDBFE']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.statCapsule}
-                  >
-                    <Text style={styles.statValue}>{stats.liveDays}</Text>
-                    <Text style={styles.statLabel}>LIVE Days</Text>
-                  </LinearGradient>
-                  <LinearGradient
-                    colors={['#E9D5FF', '#D8B4FE']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.statCapsule}
-                  >
-                    <Text style={styles.statValue}>{stats.liveHours}</Text>
-                    <Text style={styles.statLabel}>Hours</Text>
-                  </LinearGradient>
-                  <LinearGradient
-                    colors={['#FED7AA', '#FDBA74']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.statCapsule}
-                  >
-                    <Text style={styles.statValue}>{stats.diamondsToday}</Text>
-                    <Text style={styles.statLabel}>Diamonds</Text>
-                  </LinearGradient>
-                  <LinearGradient
-                    colors={['#FEE2E2', '#FECACA']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.statCapsule}
-                  >
-                    <Text style={styles.statValue}>{stats.streak}</Text>
-                    <Text style={styles.statLabel}>Day Streak 🔥</Text>
-                  </LinearGradient>
-                </View>
-              </View>
-            </CardPressable>
-
-            <CardPressable onPress={() => console.log('Battles tapped')}>
+            {/* BATTLE REMINDER CARD */}
+            <CardPressable onPress={() => router.push('/(tabs)/battles')}>
               <View style={styles.card}>
                 <View style={styles.cardHeader}>
                   <Text style={styles.cardEmoji}>⚔️</Text>
                   <View style={styles.cardHeaderText}>
-                    <Text style={styles.cardTitleLarge}>Upcoming Battles</Text>
-                    <Text style={styles.cardSubtitle}>Get ready to compete!</Text>
+                    <Text style={styles.cardTitleLarge}>Battle Reminder</Text>
+                    <Text style={styles.cardSubtitle}>Monthly battles</Text>
                   </View>
                 </View>
-                <View style={styles.battleItem}>
-                  <View style={styles.battleLeft}>
-                    <Text style={styles.battleDate}>Dec 15</Text>
-                    <Text style={styles.battleTime}>6:00 PM</Text>
-                  </View>
-                  <View style={styles.battleRight}>
-                    <Text style={styles.battleVS}>VS</Text>
-                    <Text style={styles.battleOpponent}>@sarah_live</Text>
-                  </View>
-                </View>
-                <View style={styles.battleItem}>
-                  <View style={styles.battleLeft}>
-                    <Text style={styles.battleDate}>Dec 18</Text>
-                    <Text style={styles.battleTime}>8:30 PM</Text>
-                  </View>
-                  <View style={styles.battleRight}>
-                    <Text style={styles.battleVS}>VS</Text>
-                    <Text style={styles.battleOpponent}>@mike_streams</Text>
-                  </View>
-                </View>
-                <TouchableOpacity style={styles.ctaButton}>
+                <Text style={styles.battleStatus}>Your monthly battle is not scheduled</Text>
+                <TouchableOpacity style={styles.scheduleButton}>
                   <LinearGradient
                     colors={colors.gradientPurple}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
-                    style={styles.ctaButtonGradient}
+                    style={styles.scheduleButtonGradient}
                   >
-                    <Text style={styles.ctaButtonText}>View All Battles</Text>
+                    <Text style={styles.scheduleButtonText}>Schedule Battle</Text>
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
             </CardPressable>
 
-            <CardPressable onPress={() => console.log('Tools tapped')}>
+            {/* LEARNING HUB CARD */}
+            <CardPressable onPress={() => console.log('Learning Hub tapped')}>
               <View style={styles.card}>
                 <View style={styles.cardHeader}>
-                  <Text style={styles.cardEmoji}>🛠️</Text>
+                  <Text style={styles.cardEmoji}>📚</Text>
                   <View style={styles.cardHeaderText}>
-                    <Text style={styles.cardTitleLarge}>Creator Tools</Text>
-                    <Text style={styles.cardSubtitle}>Grow your presence</Text>
+                    <Text style={styles.cardTitleLarge}>Learning Hub</Text>
+                    <Text style={styles.cardSubtitle}>Your education progress</Text>
                   </View>
                 </View>
-                <View style={styles.toolsGrid}>
-                  <TouchableOpacity style={styles.toolButton}>
-                    <LinearGradient
-                      colors={['#DBEAFE', '#BFDBFE']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.toolIconContainer}
-                    >
-                      <IconSymbol 
-                        ios_icon_name="megaphone.fill" 
-                        android_material_icon_name="campaign" 
-                        size={24} 
-                        color={colors.primary} 
-                      />
-                    </LinearGradient>
-                    <Text style={styles.toolButtonText}>Promote</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.toolButton}>
-                    <LinearGradient
-                      colors={['#FED7AA', '#FDBA74']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.toolIconContainer}
-                    >
-                      <IconSymbol 
-                        ios_icon_name="flame.fill" 
-                        android_material_icon_name="whatshot" 
-                        size={24} 
-                        color={colors.warning} 
-                      />
-                    </LinearGradient>
-                    <Text style={styles.toolButtonText}>Battles</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.toolButton}>
-                    <LinearGradient
-                      colors={['#E9D5FF', '#D8B4FE']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.toolIconContainer}
-                    >
-                      <IconSymbol 
-                        ios_icon_name="wand.and.stars" 
-                        android_material_icon_name="auto-awesome" 
-                        size={24} 
-                        color={colors.primary} 
-                      />
-                    </LinearGradient>
-                    <Text style={styles.toolButtonText}>Flyer AI</Text>
-                  </TouchableOpacity>
+                <View style={styles.learningRow}>
+                  <View style={styles.learningItem}>
+                    <Text style={styles.learningTitle}>21-Day Challenge</Text>
+                    <Text style={styles.learningProgress}>0/21</Text>
+                    <View style={styles.miniProgressBar}>
+                      <View style={[styles.miniProgressFill, { width: '0%' }]} />
+                    </View>
+                  </View>
+                  <View style={styles.learningItem}>
+                    <Text style={styles.learningTitle}>UR Education</Text>
+                    <Text style={styles.learningProgress}>0/5</Text>
+                    <View style={styles.miniProgressBar}>
+                      <View style={[styles.miniProgressFill, { width: '0%' }]} />
+                    </View>
+                  </View>
                 </View>
               </View>
             </CardPressable>
 
+            {/* MANAGER CARD */}
             <CardPressable onPress={() => console.log('Manager tapped')}>
               <View style={styles.card}>
                 <View style={styles.cardHeader}>
@@ -467,25 +289,40 @@ export default function HomeScreen() {
                     <Text style={styles.cardSubtitle}>Get personalized support</Text>
                   </View>
                 </View>
-                <Text style={styles.noManagerText}>
-                  {creator.assigned_manager_id ? 'Manager assigned' : 'No manager assigned yet'}
-                </Text>
-                {!creator.assigned_manager_id && (
-                  <TouchableOpacity style={styles.requestButton}>
-                    <LinearGradient
-                      colors={colors.gradientPurple}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.requestButtonGradient}
-                    >
-                      <Text style={styles.requestButtonText}>Request Manager</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
+                {creator.assigned_manager_id ? (
+                  <Text style={styles.managerInfo}>Manager assigned</Text>
+                ) : (
+                  <>
+                    <Text style={styles.noManagerText}>No manager assigned yet</Text>
+                    <TouchableOpacity style={styles.requestButton}>
+                      <LinearGradient
+                        colors={colors.gradientPurple}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.requestButtonGradient}
+                      >
+                        <Text style={styles.requestButtonText}>Request Manager</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </>
                 )}
               </View>
             </CardPressable>
+
+            {/* SHOP CARD */}
+            <CardPressable onPress={() => router.push('/(tabs)/shop')}>
+              <View style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.cardEmoji}>🛍️</Text>
+                  <View style={styles.cardHeaderText}>
+                    <Text style={styles.cardTitleLarge}>JAXE Shop</Text>
+                    <Text style={styles.cardSubtitle}>Coming soon to your region</Text>
+                  </View>
+                </View>
+              </View>
+            </CardPressable>
           </Animated.View>
-        </Animated.ScrollView>
+        </ScrollView>
       </View>
     </>
   );
@@ -565,141 +402,56 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingTop: 48,
+    paddingTop: 60,
     paddingHorizontal: 20,
     paddingBottom: 120,
   },
-  welcomeSection: {
-    marginBottom: 28,
-  },
-  profileRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  profilePhotoContainer: {
-    marginRight: 16,
-  },
-  profilePhotoGradient: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    padding: 4,
-    justifyContent: 'center',
+  headerCard: {
+    borderRadius: 28,
+    padding: 32,
     alignItems: 'center',
+    marginBottom: 20,
   },
-  profilePhoto: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  headerAvatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    marginBottom: 16,
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
   },
-  profileInfo: {
-    flex: 1,
-    paddingTop: 4,
-  },
-  welcomeGreeting: {
-    fontSize: 14,
-    fontFamily: 'Poppins_500Medium',
-    color: colors.textSecondary,
-    marginBottom: 2,
-  },
-  welcomeTitle: {
-    fontSize: 26,
+  headerGreeting: {
+    fontSize: 28,
     fontFamily: 'Poppins_700Bold',
     color: colors.text,
     marginBottom: 4,
-    letterSpacing: -0.5,
   },
-  welcomeSubtitle: {
-    fontSize: 13,
-    fontFamily: 'Poppins_400Regular',
-    color: colors.textSecondary,
-    marginBottom: 6,
-  },
-  tiktokHandle: {
-    fontSize: 15,
-    fontFamily: 'Poppins_600SemiBold',
+  headerHandle: {
+    fontSize: 16,
+    fontFamily: 'Poppins_500Medium',
     color: colors.primary,
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  badgeRow: {
+  headerBadges: {
     flexDirection: 'row',
     gap: 8,
-    flexWrap: 'wrap',
   },
-  badge: {
-    backgroundColor: colors.grey,
-    paddingHorizontal: 14,
+  headerBadge: {
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: 16,
   },
-  badgeText: {
-    fontSize: 12,
-    fontFamily: 'Poppins_500Medium',
-    color: colors.text,
-  },
-  liveBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  liveBadgeText: {
-    fontSize: 12,
+  headerBadgeText: {
+    fontSize: 13,
     fontFamily: 'Poppins_600SemiBold',
-    color: '#FFFFFF',
+    color: colors.primary,
   },
   card: {
     backgroundColor: colors.backgroundAlt,
     borderRadius: 28,
     padding: 24,
     marginBottom: 16,
-    boxShadow: '0px 8px 32px rgba(139, 92, 246, 0.08)',
-    elevation: 4,
-  },
-  heroCard: {
-    alignItems: 'center',
-    paddingVertical: 36,
-    marginBottom: 20,
-  },
-  heroContent: {
-    alignItems: 'center',
-  },
-  progressRing: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    padding: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  progressRingInner: {
-    width: 144,
-    height: 144,
-    borderRadius: 72,
-    backgroundColor: colors.backgroundAlt,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  diamondNumber: {
-    fontSize: 52,
-    fontFamily: 'Poppins_700Bold',
-    color: colors.primary,
-    letterSpacing: -1,
-  },
-  diamondLabel: {
-    fontSize: 28,
-    marginTop: 4,
-  },
-  cardTitle: {
-    fontSize: 22,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.text,
-    marginBottom: 6,
-  },
-  cardSubtext: {
-    fontSize: 14,
-    fontFamily: 'Poppins_400Regular',
-    color: colors.textSecondary,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -724,89 +476,99 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_400Regular',
     color: colors.textSecondary,
   },
+  bigNumber: {
+    fontSize: 48,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.primary,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
   progressBarContainer: {
     height: 10,
     backgroundColor: colors.grey,
     borderRadius: 10,
     overflow: 'hidden',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   progressBarFill: {
     height: '100%',
     borderRadius: 10,
   },
-  progressLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  progressLabel: {
-    fontSize: 13,
-    fontFamily: 'Poppins_400Regular',
-    color: colors.textSecondary,
-  },
-  progressLabelBold: {
-    fontSize: 13,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.primary,
-  },
-  milestoneInfo: {
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.grey,
-    gap: 10,
-  },
-  milestoneRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  milestoneText: {
+  progressHint: {
     fontSize: 14,
     fontFamily: 'Poppins_500Medium',
     color: colors.textSecondary,
+    textAlign: 'center',
   },
-  milestoneValue: {
-    fontSize: 15,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.text,
-  },
-  missionsGrid: {
+  statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     gap: 12,
   },
-  missionColumn: {
+  statBox: {
     flex: 1,
+    backgroundColor: colors.grey,
+    borderRadius: 20,
+    padding: 20,
     alignItems: 'center',
   },
-  missionIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  missionIcon: {
-    fontSize: 28,
-  },
-  missionTitle: {
-    fontSize: 13,
-    fontFamily: 'Poppins_600SemiBold',
+  statNumber: {
+    fontSize: 32,
+    fontFamily: 'Poppins_700Bold',
     color: colors.text,
-    textAlign: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
   },
-  missionProgress: {
-    fontSize: 12,
+  statLabel: {
+    fontSize: 13,
+    fontFamily: 'Poppins_500Medium',
+    color: colors.textSecondary,
+  },
+  contestInfo: {
+    fontSize: 14,
+    fontFamily: 'Poppins_400Regular',
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  battleStatus: {
+    fontSize: 16,
     fontFamily: 'Poppins_500Medium',
     color: colors.textSecondary,
     textAlign: 'center',
+    marginBottom: 16,
+  },
+  scheduleButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  scheduleButtonGradient: {
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  scheduleButtonText: {
+    fontSize: 16,
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#FFFFFF',
+  },
+  learningRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  learningItem: {
+    flex: 1,
+  },
+  learningTitle: {
+    fontSize: 14,
+    fontFamily: 'Poppins_600SemiBold',
+    color: colors.text,
+    marginBottom: 6,
+  },
+  learningProgress: {
+    fontSize: 20,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.primary,
     marginBottom: 8,
   },
   miniProgressBar: {
-    width: '100%',
     height: 6,
     backgroundColor: colors.grey,
     borderRadius: 6,
@@ -814,99 +576,13 @@ const styles = StyleSheet.create({
   },
   miniProgressFill: {
     height: '100%',
+    backgroundColor: colors.primary,
     borderRadius: 6,
   },
-  bonusAmount: {
-    fontSize: 20,
-    fontFamily: 'Poppins_700Bold',
-    color: colors.text,
-    marginBottom: 8,
-  },
-  statusPill: {
-    backgroundColor: colors.success,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  statusPillText: {
-    fontSize: 11,
-    fontFamily: 'Poppins_600SemiBold',
-    color: '#FFFFFF',
-  },
-  battleItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    backgroundColor: colors.grey,
-    borderRadius: 20,
-    marginBottom: 12,
-  },
-  battleLeft: {
-    flex: 1,
-  },
-  battleDate: {
-    fontSize: 14,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.text,
-    marginBottom: 2,
-  },
-  battleTime: {
-    fontSize: 12,
-    fontFamily: 'Poppins_400Regular',
-    color: colors.textSecondary,
-  },
-  battleRight: {
-    alignItems: 'flex-end',
-  },
-  battleVS: {
-    fontSize: 11,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.textTertiary,
-    marginBottom: 2,
-  },
-  battleOpponent: {
-    fontSize: 15,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.primary,
-  },
-  ctaButton: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginTop: 4,
-  },
-  ctaButtonGradient: {
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  ctaButtonText: {
+  managerInfo: {
     fontSize: 16,
-    fontFamily: 'Poppins_600SemiBold',
-    color: '#FFFFFF',
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  statCapsule: {
-    flex: 1,
-    minWidth: '46%',
-    padding: 20,
-    borderRadius: 20,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 28,
-    fontFamily: 'Poppins_700Bold',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
     fontFamily: 'Poppins_500Medium',
-    color: colors.textSecondary,
+    color: colors.text,
     textAlign: 'center',
   },
   noManagerText: {
@@ -928,28 +604,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Poppins_600SemiBold',
     color: '#FFFFFF',
-  },
-  toolsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  toolButton: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  toolIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  toolButtonText: {
-    fontSize: 12,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.text,
-    textAlign: 'center',
   },
 });

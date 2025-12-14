@@ -6,28 +6,34 @@ import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 export default function TabLayout() {
   const tabs: TabBarItem[] = [
     {
+      name: 'bonuses',
+      route: '/(tabs)/bonuses',
+      icon: 'attach-money',
+      label: 'Bonuses',
+    },
+    {
+      name: 'battles',
+      route: '/(tabs)/battles',
+      icon: 'sports-kabaddi',
+      label: 'Battles',
+    },
+    {
       name: '(home)',
       route: '/(tabs)/(home)/',
       icon: 'home',
       label: 'Home',
     },
     {
-      name: 'missions',
-      route: '/(tabs)/missions',
-      icon: 'assignment',
-      label: 'Missions',
+      name: 'ai-flyers',
+      route: '/(tabs)/ai-flyers',
+      icon: 'auto-awesome',
+      label: 'AI Flyers',
     },
     {
-      name: 'live',
-      route: '/(tabs)/live',
-      icon: 'videocam',
-      label: 'LIVE',
-    },
-    {
-      name: 'rewards',
-      route: '/(tabs)/rewards',
-      icon: 'card-giftcard',
-      label: 'Rewards',
+      name: 'shop',
+      route: '/(tabs)/shop',
+      icon: 'shopping-bag',
+      label: 'Shop',
     },
     {
       name: 'profile',
@@ -46,9 +52,10 @@ export default function TabLayout() {
         }}
       >
         <Stack.Screen key="home" name="(home)" />
-        <Stack.Screen key="missions" name="missions" />
-        <Stack.Screen key="live" name="live" />
-        <Stack.Screen key="rewards" name="rewards" />
+        <Stack.Screen key="bonuses" name="bonuses" />
+        <Stack.Screen key="battles" name="battles" />
+        <Stack.Screen key="ai-flyers" name="ai-flyers" />
+        <Stack.Screen key="shop" name="shop" />
         <Stack.Screen key="profile" name="profile" />
       </Stack>
       <FloatingTabBar tabs={tabs} />
