@@ -190,8 +190,11 @@ export default function AcademyScreen() {
     }
 
     if (item.content_type === 'video' && item.video) {
-      // Navigate to video player (placeholder for now)
-      Alert.alert('Video Player', `Playing: ${item.video.title}\n\nVideo player would open here.`);
+      // Navigate to video player
+      router.push({
+        pathname: '/(tabs)/video-player',
+        params: { videoId: item.video.id },
+      });
     } else if (item.content_type === 'quiz' && item.quiz) {
       // Navigate to quiz (placeholder for now)
       Alert.alert('Quiz', `Starting quiz: ${item.quiz.title}\n\nQuiz would open here.`);

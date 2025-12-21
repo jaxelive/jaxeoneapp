@@ -271,17 +271,11 @@ export default function BattlesScreen() {
         }}
       />
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        {/* Header */}
-        <LinearGradient
-          colors={['#FFFFFF', '#FEE2E2']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.headerCard}
-        >
-          <Text style={styles.emoji}>⚔️</Text>
+        {/* Header - Typography Only */}
+        <View style={styles.headerCard}>
           <Text style={styles.headerTitle}>Creator Battles</Text>
           <Text style={styles.headerSubtitle}>Schedule and compete in live battles</Text>
-        </LinearGradient>
+        </View>
 
         {/* Tab Navigation */}
         <View style={styles.tabContainer}>
@@ -526,17 +520,14 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   headerCard: {
-    borderRadius: 28,
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 24,
     padding: 32,
     alignItems: 'center',
     marginBottom: 20,
   },
-  emoji: {
-    fontSize: 64,
-    marginBottom: 12,
-  },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '700',
     color: colors.text,
     textAlign: 'center',

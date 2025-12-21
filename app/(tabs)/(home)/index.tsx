@@ -11,6 +11,7 @@ import {
   Animated,
   Dimensions,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { colors } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
@@ -38,6 +39,8 @@ export default function HomeScreen() {
   const [challengeProgress, setChallengeProgress] = useState(7);
   const [educationProgress, setEducationProgress] = useState(3);
   const [bonusForecast, setBonusForecast] = useState(175);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeCardIndex, setActiveCardIndex] = useState(0);
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -46,6 +49,14 @@ export default function HomeScreen() {
       useNativeDriver: true,
     }).start();
   }, []);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refetch();
+    await fetchBattleData();
+    await fetchLearningData();
+    setRefreshing(false);
+  };
 
   useEffect(() => {
     if (creator) {
@@ -192,6 +203,14 @@ export default function HomeScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           bounces={true}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+              colors={[colors.primary]}
+            />
+          }
         >
           <Animated.View style={{ opacity: fadeAnim }}>
             {/* HEADER */}
@@ -229,50 +248,107 @@ export default function HomeScreen() {
                   </View>
                 </View>
               </View>
-              <TouchableOpacity 
-                style={styles.headerIconButton}
-                onPress={() => console.log('Open JAXE Agent chat')}
-              >
-                <IconSymbol 
-                  ios_icon_name="message.fill" 
-                  android_material_icon_name="chat" 
-                  size={26} 
-                  color="#6642EF" 
-                />
-              </TouchableOpacity>
+              <View style={styles.headerIcons}>
+                <TouchableOpacity 
+                  style={styles.headerIconButton}
+                  onPress={() => router.push('/(tabs)/notifications' as any)}
+                >
+                  <IconSymbol 
+                    ios_icon_name="bell.fill" 
+                    android_material_icon_name="notifications" 
+                    size={24} 
+                    color="#6642EF" 
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.headerIconButton}
+                  onPress={() => console.log('Open JAXE Agent chat')}
+                >
+                  <IconSymbol 
+                    ios_icon_name="message.fill" 
+                    android_material_icon_name="chat" 
+                    size={24} 
+                    color="#6642EF" 
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* ROTATING CARDS SECTION */}
             <View style={styles.rotatingCardsContainer}>
-              {/* Back Card (Faded) - Bonus Forecast */}
-              <View style={styles.backCard}>
-                <RotatingCard
-                  type="bonus"
-                  isFaded={true}
-                  onPress={() => console.log('Bonus card tapped - no navigation')}
-                  data={{
-                    bonusAmount: 100,
-                    nextBonus: 175,
-                    liveDays: stats.liveDays,
-                    liveHours: stats.liveHours,
-                    battlesBooked: 1,
-                  }}
-                />
-              </View>
+              {activeCardIndex === 0 ? (
+                <>
+                  {/* Back Card (Faded) - Bonus Forecast */}
+                  <TouchableOpacity 
+                    style={styles.backCard}
+                    onPress={() => setActiveCardIndex(1)}
+                    activeOpacity={0.9}
+                  >
+                    <RotatingCard
+                      type="bonus"
+                      isFaded={true}
+                      onPress={() => {}}
+                      data={{
+                        bonusAmount: 100,
+                        nextBonus: 175,
+                        liveDays: stats.liveDays,
+                        liveHours: stats.liveHours,
+                        battlesBooked: 1,
+                      }}
+                    />
+                  </TouchableOpacity>
 
-              {/* Front Card - Diamonds */}
-              <View style={styles.frontCard}>
-                <RotatingCard
-                  type="diamonds"
-                  onPress={() => console.log('Diamonds card tapped - no navigation')}
-                  data={{
-                    diamondsEarned: stats.totalDiamonds,
-                    totalGoal: stats.targetAmount,
-                    remaining: stats.remaining,
-                    nextTier: stats.nextTarget,
-                  }}
-                />
-              </View>
+                  {/* Front Card - Diamonds */}
+                  <View style={styles.frontCard}>
+                    <RotatingCard
+                      type="diamonds"
+                      onPress={() => {}}
+                      data={{
+                        diamondsEarned: stats.totalDiamonds,
+                        totalGoal: stats.targetAmount,
+                        remaining: stats.remaining,
+                        nextTier: stats.nextTarget,
+                      }}
+                    />
+                  </View>
+                </>
+              ) : (
+                <>
+                  {/* Back Card (Faded) - Diamonds */}
+                  <TouchableOpacity 
+                    style={styles.backCard}
+                    onPress={() => setActiveCardIndex(0)}
+                    activeOpacity={0.9}
+                  >
+                    <RotatingCard
+                      type="diamonds"
+                      isFaded={true}
+                      onPress={() => {}}
+                      data={{
+                        diamondsEarned: stats.totalDiamonds,
+                        totalGoal: stats.targetAmount,
+                        remaining: stats.remaining,
+                        nextTier: stats.nextTarget,
+                      }}
+                    />
+                  </TouchableOpacity>
+
+                  {/* Front Card - Bonus Forecast */}
+                  <View style={styles.frontCard}>
+                    <RotatingCard
+                      type="bonus"
+                      onPress={() => {}}
+                      data={{
+                        bonusAmount: 100,
+                        nextBonus: 175,
+                        liveDays: stats.liveDays,
+                        liveHours: stats.liveHours,
+                        battlesBooked: 1,
+                      }}
+                    />
+                  </View>
+                </>
+              )}
             </View>
 
             {/* EXTRA SPACING TO SHOW BONUS CARD FULLY */}
@@ -344,12 +420,6 @@ export default function HomeScreen() {
               <View style={styles.darkCard}>
                 <View style={styles.cardHeaderRow}>
                   <View style={styles.cardHeaderLeft}>
-                    <IconSymbol 
-                      ios_icon_name="book.fill" 
-                      android_material_icon_name="menu-book" 
-                      size={24} 
-                      color="#FFFFFF" 
-                    />
                     <Text style={styles.cardTitle}>Academy</Text>
                   </View>
                   <View style={styles.requiredBadge}>
@@ -692,6 +762,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'Poppins_500Medium',
     color: '#A0A0A0',
+  },
+  headerIcons: {
+    flexDirection: 'row',
+    gap: 8,
   },
   headerIconButton: {
     width: 48,

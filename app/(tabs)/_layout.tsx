@@ -46,6 +46,10 @@ export default function TabLayout() {
         <Stack.Screen key="manager-details" name="manager-details" />
         <Stack.Screen key="shop" name="shop" />
         <Stack.Screen key="profile" name="profile" />
+        <Stack.Screen key="notifications" name="notifications" />
+        <Stack.Screen key="academy" name="academy" />
+        <Stack.Screen key="challenge-list" name="challenge-list" />
+        <Stack.Screen key="video-player" name="video-player" />
       </Stack>
       <FloatingTabBar tabs={tabs} />
     </>
