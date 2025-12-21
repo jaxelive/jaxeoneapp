@@ -20,6 +20,8 @@ import { useCreatorData } from "@/hooks/useCreatorData";
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold, Poppins_800ExtraBold } from '@expo-google-fonts/poppins';
 import { supabase } from "@/app/integrations/supabase/client";
 import { RotatingCard } from "@/components/RotatingCard";
+import { AnimatedNumber } from "@/components/AnimatedNumber";
+import { AnimatedProgressBar } from "@/components/AnimatedProgressBar";
 
 const { width } = Dimensions.get('window');
 
@@ -188,6 +190,9 @@ export default function HomeScreen() {
   const liveHoursProgress = Math.min((stats.liveHours / 10) * 100, 100);
   const battlesProgress = 100; // Assuming 1/1 battles completed
   const overallRequirements = Math.round((liveDaysProgress + liveHoursProgress + battlesProgress) / 3);
+
+  // Calculate challenge progress percentage
+  const challengePercentage = (challengeProgress / 21) * 100;
 
   return (
     <>
@@ -363,7 +368,13 @@ export default function HomeScreen() {
                     <Text style={styles.pendingText}>2 PENDING TASKS</Text>
                   </View>
                   <View style={styles.circularProgress}>
-                    <Text style={styles.circularProgressText}>25%</Text>
+                    <AnimatedNumber 
+                      value={challengePercentage} 
+                      style={styles.circularProgressText}
+                      decimals={0}
+                      suffix="%"
+                      formatNumber={false}
+                    />
                   </View>
                 </View>
 
@@ -430,11 +441,20 @@ export default function HomeScreen() {
                 <View style={styles.academyContent}>
                   <View style={styles.academyLeft}>
                     <Text style={styles.academyProgressLabel}>Video Progress</Text>
-                    <Text style={styles.academyProgressValue}>{educationProgress}/5</Text>
-                    
-                    <View style={styles.academyProgressBar}>
-                      <View style={[styles.academyProgressFill, { width: `${(educationProgress / 5) * 100}%` }]} />
+                    <View style={styles.academyProgressValueRow}>
+                      <AnimatedNumber 
+                        value={educationProgress} 
+                        style={styles.academyProgressValue}
+                        formatNumber={false}
+                      />
+                      <Text style={styles.academyProgressValue}>/5</Text>
                     </View>
+                    
+                    <AnimatedProgressBar
+                      percentage={(educationProgress / 5) * 100}
+                      height={6}
+                      containerStyle={{ marginBottom: 12 }}
+                    />
 
                     <View style={styles.quizStatus}>
                       <IconSymbol 
@@ -936,23 +956,15 @@ const styles = StyleSheet.create({
     color: '#A0A0A0',
     marginBottom: 4,
   },
+  academyProgressValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 12,
+  },
   academyProgressValue: {
     fontSize: 18,
     fontFamily: 'Poppins_700Bold',
     color: '#FFFFFF',
-    marginBottom: 12,
-  },
-  academyProgressBar: {
-    height: 6,
-    backgroundColor: '#2A2A2A',
-    borderRadius: 6,
-    overflow: 'hidden',
-    marginBottom: 12,
-  },
-  academyProgressFill: {
-    height: '100%',
-    backgroundColor: '#6642EF',
-    borderRadius: 6,
   },
   quizStatus: {
     flexDirection: 'row',

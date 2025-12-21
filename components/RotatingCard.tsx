@@ -2,6 +2,8 @@
 import React, { useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { IconSymbol } from './IconSymbol';
+import { AnimatedNumber } from './AnimatedNumber';
+import { AnimatedProgressBar } from './AnimatedProgressBar';
 
 interface RotatingCardProps {
   type: 'bonus' | 'diamonds';
@@ -74,6 +76,7 @@ export function RotatingCard({ type, isFaded = false, onPress, data }: RotatingC
     const liveHoursComplete = (data.liveHours || 0) >= 40;
     const battlesComplete = (data.battlesBooked || 0) >= 1;
     const requirementsMet = [liveDaysComplete, liveHoursComplete, battlesComplete].filter(Boolean).length;
+    const requirementsPercentage = (requirementsMet / 3) * 100;
 
     return (
       <TouchableOpacity
@@ -96,7 +99,11 @@ export function RotatingCard({ type, isFaded = false, onPress, data }: RotatingC
           {/* Main Amount */}
           <View style={styles.mainAmountSection}>
             <View style={styles.amountRow}>
-              <Text style={styles.mainAmount}>${data.bonusAmount || 100}</Text>
+              <AnimatedNumber 
+                value={data.bonusAmount || 100}
+                style={styles.mainAmount}
+                prefix="$"
+              />
               <View style={styles.checkCircle}>
                 <IconSymbol 
                   ios_icon_name="checkmark" 
@@ -112,20 +119,38 @@ export function RotatingCard({ type, isFaded = false, onPress, data }: RotatingC
           {/* Next Bonus */}
           <View style={styles.nextBonusSection}>
             <Text style={styles.nextBonusLabel}>NEXT BONUS ${data.nextBonus || 175}</Text>
-            <Text style={styles.requirementsText}>{requirementsMet} of 3 requirements met</Text>
+            <View style={styles.requirementsTextContainer}>
+              <AnimatedNumber 
+                value={requirementsMet}
+                style={styles.requirementsText}
+                formatNumber={false}
+              />
+              <Text style={styles.requirementsText}> of 3 requirements met</Text>
+            </View>
           </View>
 
           {/* Progress Bar */}
-          <View style={styles.progressBarContainer}>
-            <View style={[styles.progressBarFill, { width: `${(requirementsMet / 3) * 100}%` }]} />
-          </View>
+          <AnimatedProgressBar
+            percentage={requirementsPercentage}
+            height={12}
+            backgroundColor="rgba(255, 255, 255, 0.2)"
+            fillColor="rgba(255, 255, 255, 0.9)"
+            containerStyle={{ marginBottom: 24 }}
+          />
 
           {/* Requirements */}
           <View style={styles.requirementsContainer}>
             <View style={styles.requirementRow}>
               <Text style={styles.requirementLabel}>LIVE Days</Text>
               <View style={styles.requirementValue}>
-                <Text style={styles.requirementText}>{data.liveDays || 15} / 15</Text>
+                <View style={styles.requirementTextRow}>
+                  <AnimatedNumber 
+                    value={data.liveDays || 15}
+                    style={styles.requirementText}
+                    formatNumber={false}
+                  />
+                  <Text style={styles.requirementText}> / 15</Text>
+                </View>
                 {liveDaysComplete && (
                   <View style={styles.checkmarkSmall}>
                     <IconSymbol 
@@ -142,7 +167,14 @@ export function RotatingCard({ type, isFaded = false, onPress, data }: RotatingC
             <View style={styles.requirementRow}>
               <Text style={styles.requirementLabel}>LIVE Hours</Text>
               <View style={styles.requirementValue}>
-                <Text style={styles.requirementText}>{data.liveHours || 32} / 40</Text>
+                <View style={styles.requirementTextRow}>
+                  <AnimatedNumber 
+                    value={data.liveHours || 32}
+                    style={styles.requirementText}
+                    formatNumber={false}
+                  />
+                  <Text style={styles.requirementText}> / 40</Text>
+                </View>
                 {!liveHoursComplete && (
                   <View style={styles.emptyCircle} />
                 )}
@@ -152,7 +184,14 @@ export function RotatingCard({ type, isFaded = false, onPress, data }: RotatingC
             <View style={styles.requirementRow}>
               <Text style={styles.requirementLabel}>Battles Booked</Text>
               <View style={styles.requirementValue}>
-                <Text style={styles.requirementText}>{data.battlesBooked || 1} / 1</Text>
+                <View style={styles.requirementTextRow}>
+                  <AnimatedNumber 
+                    value={data.battlesBooked || 1}
+                    style={styles.requirementText}
+                    formatNumber={false}
+                  />
+                  <Text style={styles.requirementText}> / 1</Text>
+                </View>
                 {battlesComplete && (
                   <View style={styles.checkmarkSmall}>
                     <IconSymbol 
@@ -195,7 +234,10 @@ export function RotatingCard({ type, isFaded = false, onPress, data }: RotatingC
         {/* Header with Diamonds Number at Top-Left */}
         <View style={styles.diamondsHeader}>
           <View style={styles.diamondsTopLeft}>
-            <Text style={styles.diamondsNumberTopLeft}>{(data.diamondsEarned || 15000).toLocaleString()}</Text>
+            <AnimatedNumber 
+              value={data.diamondsEarned || 15000}
+              style={styles.diamondsNumberTopLeft}
+            />
             <Text style={styles.diamondsLabelSmall}>Diamonds</Text>
           </View>
           <View style={styles.tierBadge}>
@@ -208,13 +250,22 @@ export function RotatingCard({ type, isFaded = false, onPress, data }: RotatingC
         <View style={styles.progressSection}>
           <View style={styles.progressHeader}>
             <Text style={styles.progressLabel}>Progress to Goal</Text>
-            <Text style={styles.remainingText}>Remaining: {(data.remaining || 185000).toLocaleString()}</Text>
+            <View style={styles.remainingTextRow}>
+              <Text style={styles.remainingText}>Remaining: </Text>
+              <AnimatedNumber 
+                value={data.remaining || 185000}
+                style={styles.remainingText}
+              />
+            </View>
           </View>
 
           {/* Progress Bar */}
-          <View style={styles.progressBarContainer}>
-            <View style={[styles.progressBarFill, { width: `${Math.min(progressPercentage, 100)}%` }]} />
-          </View>
+          <AnimatedProgressBar
+            percentage={progressPercentage}
+            height={12}
+            backgroundColor="rgba(255, 255, 255, 0.2)"
+            fillColor="rgba(255, 255, 255, 0.9)"
+          />
         </View>
 
         {/* Goal Info */}
@@ -224,7 +275,10 @@ export function RotatingCard({ type, isFaded = false, onPress, data }: RotatingC
             <Text style={styles.goalLabel}>NEXT TIER</Text>
           </View>
           <View style={styles.goalRow}>
-            <Text style={styles.goalValue}>{(data.totalGoal || 200000).toLocaleString()}</Text>
+            <AnimatedNumber 
+              value={data.totalGoal || 200000}
+              style={styles.goalValue}
+            />
             <Text style={styles.goalValueHighlight}>{data.nextTier || 'Silver'}</Text>
           </View>
         </View>
@@ -335,22 +389,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
+  requirementsTextContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   requirementsText: {
     fontSize: 13,
     fontFamily: 'Poppins_500Medium',
     color: 'rgba(255, 255, 255, 0.9)',
-  },
-  progressBarContainer: {
-    height: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 24,
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 12,
   },
   requirementsContainer: {
     gap: 16,
@@ -373,6 +419,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  requirementTextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   requirementText: {
     fontSize: 15,
@@ -450,6 +500,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Poppins_600SemiBold',
     color: 'rgba(255, 255, 255, 0.9)',
+  },
+  remainingTextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   remainingText: {
     fontSize: 13,
