@@ -17,7 +17,7 @@ import { colors } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { HeaderRightButton, HeaderLeftButton } from "@/components/HeaderButtons";
 import { useCreatorData } from "@/hooks/useCreatorData";
-import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
+import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold, Poppins_800ExtraBold } from '@expo-google-fonts/poppins';
 import { supabase } from "@/app/integrations/supabase/client";
 
 const { width } = Dimensions.get('window');
@@ -30,13 +30,14 @@ export default function HomeScreen() {
     Poppins_500Medium,
     Poppins_600SemiBold,
     Poppins_700Bold,
+    Poppins_800ExtraBold,
   });
   
   const { creator, loading, error, stats, refetch } = useCreatorData('avelezsanti');
   const [nextBattle, setNextBattle] = useState<any>(null);
   const [challengeProgress, setChallengeProgress] = useState(7);
   const [educationProgress, setEducationProgress] = useState(3);
-  const [bonusForecast, setBonusForecast] = useState(100);
+  const [bonusForecast, setBonusForecast] = useState(175);
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -176,6 +177,12 @@ export default function HomeScreen() {
   const region = creator.region || 'USA';
   const creatorType = creator.creator_type?.[0] || 'Creator';
 
+  // Calculate requirements progress
+  const liveDaysProgress = Math.min((stats.liveDays / 5) * 100, 100);
+  const liveHoursProgress = Math.min((stats.liveHours / 10) * 100, 100);
+  const battlesProgress = 100; // Assuming 1/1 battles completed
+  const overallRequirements = Math.round((liveDaysProgress + liveHoursProgress + battlesProgress) / 3);
+
   return (
     <>
       <Stack.Screen
@@ -201,7 +208,13 @@ export default function HomeScreen() {
                 />
                 <View style={styles.headerInfo}>
                   <Text style={styles.headerGreeting}>Welcome back,</Text>
-                  <Text style={styles.headerName}>{fullName} ⭐</Text>
+                  <View style={styles.headerNameRow}>
+                    <Text style={styles.headerName}>{fullName} </Text>
+                    <Text style={styles.headerEmoji}>⭐ </Text>
+                    <View style={styles.goldBadge}>
+                      <Text style={styles.goldBadgeText}>GOLD</Text>
+                    </View>
+                  </View>
                   <View style={styles.headerBadges}>
                     <View style={styles.headerBadge}>
                       <Text style={styles.headerBadgeText}>Live / Shop</Text>
@@ -220,77 +233,93 @@ export default function HomeScreen() {
                   </View>
                 </View>
               </View>
-              <TouchableOpacity style={styles.headerIcon}>
+              <TouchableOpacity style={styles.headerIconButton}>
                 <IconSymbol 
-                  ios_icon_name="bell.fill" 
-                  android_material_icon_name="notifications" 
+                  ios_icon_name="message.fill" 
+                  android_material_icon_name="chat-bubble" 
                   size={24} 
-                  color={colors.text} 
+                  color="#FFFFFF" 
                 />
               </TouchableOpacity>
             </View>
 
-            {/* DIAMONDS EARNED CARD */}
+            {/* MAIN DIAMOND CARD WITH GRADIENT */}
             <CardPressable onPress={() => console.log('Diamonds tapped')}>
               <LinearGradient
-                colors={['#7C3AED', '#A78BFA']}
+                colors={['#7C3AED', '#9333EA', '#A855F7']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={styles.diamondsCard}
+                style={styles.mainCard}
               >
-                <View style={styles.diamondsHeader}>
-                  <View style={styles.diamondsLeft}>
-                    <Text style={styles.diamondsLabel}>DIAMONDS EARNED 💎</Text>
-                    <Text style={styles.diamondsValue}>{stats.monthlyDiamonds.toLocaleString()}</Text>
-                  </View>
-                  <View style={styles.diamondsRight}>
-                    <View style={styles.silverBadge}>
-                      <Text style={styles.silverBadgeText}>Silver ⭐</Text>
-                    </View>
-                  </View>
-                </View>
-                
-                <View style={styles.progressSection}>
-                  <View style={styles.progressHeader}>
-                    <Text style={styles.progressTitle}>Progress to Goal</Text>
-                    <Text style={styles.progressRemaining}>Remaining: {stats.remaining.toLocaleString()}</Text>
-                  </View>
-                  <View style={styles.progressBarContainer}>
-                    <View style={[styles.progressBarFill, { width: `${Math.min(stats.currentProgress, 100)}%` }]} />
-                  </View>
-                  <View style={styles.progressFooter}>
-                    <View>
-                      <Text style={styles.progressLabel}>TOTAL GOAL</Text>
-                      <Text style={styles.progressValue}>{stats.targetAmount.toLocaleString()}</Text>
-                    </View>
-                    <View style={styles.progressRight}>
-                      <Text style={styles.progressLabel}>NEXT TIER</Text>
-                      <Text style={styles.progressValue}>{stats.nextTarget}</Text>
-                    </View>
+                {/* Top Section - Goal and Badge */}
+                <View style={styles.mainCardHeader}>
+                  <Text style={styles.goalLabel}>TOTAL GOAL: 200,000</Text>
+                  <View style={styles.silverBadge}>
+                    <Text style={styles.silverBadgeText}>Silver ⭐</Text>
                   </View>
                 </View>
 
-                <View style={styles.bonusSection}>
-                  <Text style={styles.bonusTitle}>Bonus Forecast</Text>
-                  <Text style={styles.bonusSubtitle}>Upcoming bonus: ${bonusForecast}</Text>
-                  <Text style={styles.bonusNext}>Next bonus ${bonusForecast + 75}</Text>
-                  <View style={styles.bonusProgressBar}>
-                    <View style={[styles.bonusProgressFill, { width: '60%' }]} />
+                {/* Diamonds Earned */}
+                <View style={styles.diamondsSection}>
+                  <Text style={styles.diamondsValue}>15,000</Text>
+                  <Text style={styles.diamondsLabel}>Diamonds Earned 💎</Text>
+                </View>
+
+                {/* Progress Bar */}
+                <View style={styles.progressSection}>
+                  <View style={styles.progressHeader}>
+                    <Text style={styles.progressLabel}>Progress to Goal</Text>
+                    <Text style={styles.progressRemaining}>Remaining: 185,000</Text>
                   </View>
-                  <View style={styles.bonusRequirements}>
-                    <Text style={styles.bonusRequirement}>REQUIREMENTS</Text>
-                    <View style={styles.bonusStats}>
-                      <View style={styles.bonusStat}>
-                        <Text style={styles.bonusStatLabel}>LIVE Days</Text>
-                        <Text style={styles.bonusStatValue}>{stats.liveDays} / 15</Text>
-                      </View>
-                      <View style={styles.bonusStat}>
-                        <Text style={styles.bonusStatLabel}>LIVE Hours</Text>
-                        <Text style={styles.bonusStatValue}>{stats.liveHours} / 40</Text>
-                      </View>
-                      <View style={styles.bonusStat}>
-                        <Text style={styles.bonusStatLabel}>Battles Booked</Text>
-                        <Text style={styles.bonusStatValue}>0 / 1 ☐</Text>
+                  <View style={styles.progressBarContainer}>
+                    <View style={[styles.progressBarFill, { width: '7.5%' }]} />
+                  </View>
+                  <View style={styles.nextTierContainer}>
+                    <Text style={styles.nextTierLabel}>NEXT TIER: SILVER</Text>
+                  </View>
+                </View>
+
+                {/* Bonus Forecast Section */}
+                <View style={styles.bonusForecastCard}>
+                  <View style={styles.bonusForecastHeader}>
+                    <View>
+                      <Text style={styles.bonusForecastTitle}>Bonus Forecast</Text>
+                      <Text style={styles.bonusForecastSubtitle}>Upcoming bonus: $100</Text>
+                    </View>
+                    <View style={styles.bonusAmountContainer}>
+                      <Text style={styles.bonusAmount}>${bonusForecast}</Text>
+                      <Text style={styles.bonusNextLabel}>NEXT BONUS</Text>
+                    </View>
+                  </View>
+
+                  {/* Requirements Met Progress */}
+                  <View style={styles.requirementsSection}>
+                    <View style={styles.requirementsHeader}>
+                      <Text style={styles.requirementsLabel}>REQUIREMENTS MET</Text>
+                      <Text style={styles.requirementsPercentage}>{overallRequirements}%</Text>
+                    </View>
+                    <View style={styles.requirementsProgressBar}>
+                      <View style={[styles.requirementsProgressFill, { width: `${overallRequirements}%` }]} />
+                    </View>
+                  </View>
+
+                  {/* Requirements Stats */}
+                  <View style={styles.requirementsStats}>
+                    <View style={styles.requirementStat}>
+                      <Text style={styles.requirementStatLabel}>LIVE DAYS</Text>
+                      <Text style={styles.requirementStatValue}>{stats.liveDays}/5</Text>
+                    </View>
+                    <View style={styles.requirementStat}>
+                      <Text style={styles.requirementStatLabel}>HOURS</Text>
+                      <Text style={styles.requirementStatValue}>{stats.liveHours}/10</Text>
+                    </View>
+                    <View style={styles.requirementStat}>
+                      <Text style={styles.requirementStatLabel}>BATTLES</Text>
+                      <View style={styles.requirementStatValueRow}>
+                        <Text style={styles.requirementStatValue}>1/1</Text>
+                        <View style={styles.checkmarkCircle}>
+                          <Text style={styles.checkmark}>✓</Text>
+                        </View>
                       </View>
                     </View>
                   </View>
@@ -300,128 +329,144 @@ export default function HomeScreen() {
 
             {/* 21-DAY CHALLENGE CARD */}
             <CardPressable onPress={() => router.push('/(tabs)/missions')}>
-              <View style={styles.card}>
-                <View style={styles.cardHeader}>
+              <View style={styles.darkCard}>
+                <View style={styles.cardHeaderRow}>
                   <View style={styles.cardHeaderLeft}>
-                    <IconSymbol 
-                      ios_icon_name="calendar" 
-                      android_material_icon_name="calendar-today" 
-                      size={24} 
-                      color={colors.primary} 
-                    />
-                    <Text style={styles.cardTitle}>21-Day Challenge</Text>
+                    <View style={styles.pendingDot} />
+                    <Text style={styles.pendingText}>2 PENDING TASKS</Text>
                   </View>
-                  <View style={styles.pendingBadge}>
-                    <Text style={styles.pendingBadgeText}>2 PENDING</Text>
+                  <View style={styles.circularProgress}>
+                    <Text style={styles.circularProgressText}>25%</Text>
                   </View>
                 </View>
+
+                <Text style={styles.cardTitle}>21-Day Challenge</Text>
+
+                {/* Challenge Days */}
                 <View style={styles.challengeDays}>
                   <View style={styles.challengeDay}>
-                    <View style={styles.challengeDayCircle}>
+                    <View style={[styles.challengeDayCircle, styles.challengeDayCompleted]}>
                       <IconSymbol 
                         ios_icon_name="checkmark" 
                         android_material_icon_name="check" 
-                        size={16} 
-                        color={colors.success} 
+                        size={20} 
+                        color="#FFFFFF" 
                       />
                     </View>
                     <Text style={styles.challengeDayLabel}>Day 4</Text>
                   </View>
-                  <View style={[styles.challengeDay, styles.challengeDayActive]}>
-                    <View style={[styles.challengeDayCircle, styles.challengeDayCircleActive]}>
+                  <View style={styles.challengeDay}>
+                    <View style={[styles.challengeDayCircle, styles.challengeDayActive]}>
                       <Text style={styles.challengeDayNumber}>5</Text>
                     </View>
-                    <Text style={styles.challengeDayLabel}>Today</Text>
+                    <Text style={styles.challengeDayLabel}>Day 5</Text>
                   </View>
                   <View style={styles.challengeDay}>
-                    <View style={[styles.challengeDayCircle, styles.challengeDayCircleLocked]}>
-                      <IconSymbol 
-                        ios_icon_name="lock.fill" 
-                        android_material_icon_name="lock" 
-                        size={16} 
-                        color={colors.textTertiary} 
-                      />
+                    <View style={[styles.challengeDayCircle, styles.challengeDayLocked]}>
+                      <Text style={styles.challengeDayNumber}>6</Text>
                     </View>
-                    <Text style={styles.challengeDayLabel}>Day 6</Text>
+                    <Text style={styles.challengeDayLabelLocked}>Day 6</Text>
+                  </View>
+                  <View style={styles.challengeDay}>
+                    <View style={[styles.challengeDayCircle, styles.challengeDayLocked]}>
+                      <Text style={styles.challengeDayNumber}>7</Text>
+                    </View>
+                    <Text style={styles.challengeDayLabelLocked}>Day 7</Text>
                   </View>
                 </View>
+
+                {/* Continue Button */}
                 <TouchableOpacity style={styles.continueButton}>
                   <Text style={styles.continueButtonText}>Continue Today&apos;s Task</Text>
+                  <IconSymbol 
+                    ios_icon_name="arrow.right" 
+                    android_material_icon_name="arrow-forward" 
+                    size={18} 
+                    color="#1A1A1A" 
+                  />
                 </TouchableOpacity>
               </View>
             </CardPressable>
 
             {/* ACADEMY CARD */}
             <CardPressable onPress={() => router.push('/(tabs)/learning-hub')}>
-              <View style={styles.card}>
-                <View style={styles.cardHeader}>
+              <View style={styles.darkCard}>
+                <View style={styles.cardHeaderRow}>
                   <View style={styles.cardHeaderLeft}>
+                    <IconSymbol 
+                      ios_icon_name="graduationcap.fill" 
+                      android_material_icon_name="school" 
+                      size={24} 
+                      color="#FFFFFF" 
+                    />
                     <Text style={styles.cardTitle}>Academy</Text>
                   </View>
-                  <View style={styles.quizBadge}>
-                    <Text style={styles.quizBadgeText}>Quiz: Not started 🔒</Text>
+                  <View style={styles.requiredBadge}>
+                    <Text style={styles.requiredBadgeText}>REQUIRED</Text>
                   </View>
                 </View>
-                <View style={styles.requiredBadge}>
-                  <Text style={styles.requiredBadgeText}>REQUIRED TO COMPLETE</Text>
-                </View>
+
                 <View style={styles.academyContent}>
                   <View style={styles.academyLeft}>
-                    <Text style={styles.academyProgress}>Progress</Text>
-                    <Text style={styles.academyVideos}>{educationProgress} / 12 videos</Text>
+                    <Text style={styles.academyProgressLabel}>Video Progress</Text>
+                    <Text style={styles.academyProgressValue}>{educationProgress}/12</Text>
+                    
                     <View style={styles.academyProgressBar}>
-                      <LinearGradient
-                        colors={colors.gradientPurple}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={[styles.academyProgressFill, { width: `${(educationProgress / 12) * 100}%` }]}
-                      />
+                      <View style={[styles.academyProgressFill, { width: `${(educationProgress / 12) * 100}%` }]} />
                     </View>
-                    <TouchableOpacity style={styles.continueLink}>
-                      <Text style={styles.continueLinkText}>Continue learning →</Text>
+
+                    <View style={styles.quizStatus}>
+                      <IconSymbol 
+                        ios_icon_name="lock.fill" 
+                        android_material_icon_name="lock" 
+                        size={14} 
+                        color="#A0A0A0" 
+                      />
+                      <Text style={styles.quizStatusText}>Quiz: Not started</Text>
+                    </View>
+
+                    <TouchableOpacity>
+                      <Text style={styles.continueLink}>Continue learning</Text>
                     </TouchableOpacity>
                   </View>
+
                   <View style={styles.academyRight}>
-                    <Image
-                      source={{ uri: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=200&h=200&fit=crop' }}
-                      style={styles.academyThumbnail}
-                    />
-                    <View style={styles.playButton}>
-                      <IconSymbol 
-                        ios_icon_name="play.fill" 
-                        android_material_icon_name="play-arrow" 
-                        size={20} 
-                        color={colors.text} 
-                      />
+                    <View style={styles.videoThumbnail}>
+                      <View style={styles.playIconContainer}>
+                        <IconSymbol 
+                          ios_icon_name="play.fill" 
+                          android_material_icon_name="play-arrow" 
+                          size={32} 
+                          color="#FFFFFF" 
+                        />
+                      </View>
                     </View>
                   </View>
                 </View>
               </View>
             </CardPressable>
 
-            {/* MANAGER CARD */}
+            {/* ASSIGNED MANAGER CARD */}
             <CardPressable onPress={() => console.log('Manager tapped')}>
-              <View style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.cardHeaderLeft}>
+              <View style={styles.darkCard}>
+                <View style={styles.managerContent}>
+                  <View style={styles.managerLeft}>
                     <Image
                       source={{ uri: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop' }}
                       style={styles.managerAvatar}
                     />
-                    <View>
-                      <Text style={styles.managerLabel}>MANAGER</Text>
-                      <Text style={styles.managerName}>Michael Chen</Text>
-                      <View style={styles.managerStatus}>
-                        <View style={styles.managerStatusDot} />
-                      </View>
-                    </View>
+                    <View style={styles.managerOnlineIndicator} />
+                  </View>
+                  <View style={styles.managerInfo}>
+                    <Text style={styles.managerLabel}>ASSIGNED MANAGER</Text>
+                    <Text style={styles.managerName}>Michael Chen</Text>
                   </View>
                   <TouchableOpacity style={styles.emailButton}>
                     <IconSymbol 
                       ios_icon_name="envelope.fill" 
                       android_material_icon_name="email" 
                       size={20} 
-                      color={colors.primary} 
+                      color="#FFFFFF" 
                     />
                   </TouchableOpacity>
                 </View>
@@ -429,43 +474,59 @@ export default function HomeScreen() {
             </CardPressable>
 
             {/* VS BATTLE CARD */}
-            {nextBattle && (
-              <CardPressable onPress={() => router.push('/(tabs)/battles')}>
-                <View style={styles.card}>
-                  <View style={styles.battleHeader}>
-                    <Text style={styles.battleTitle}>VS Battle</Text>
-                    <Text style={styles.battleSubtitle}>Monesto Airlines</Text>
+            <CardPressable onPress={() => router.push('/(tabs)/battles')}>
+              <View style={styles.darkCard}>
+                <View style={styles.battleHeader}>
+                  <Text style={styles.battleTitle}>VS Battle</Text>
+                  <View style={styles.battlePointsContainer}>
+                    <IconSymbol 
+                      ios_icon_name="trophy.fill" 
+                      android_material_icon_name="emoji-events" 
+                      size={16} 
+                      color="#8B5CF6" 
+                    />
+                    <Text style={styles.battlePoints}>7,390</Text>
                   </View>
-                  <View style={styles.battleContent}>
-                    <View style={styles.battleCreator}>
-                      <Image
-                        source={{ uri: profileImageUrl }}
-                        style={styles.battleAvatar}
-                      />
-                      <Text style={styles.battleCreatorName}>You</Text>
-                    </View>
-                    <View style={styles.battleCenter}>
-                      <Text style={styles.battleStarting}>STARTING IN</Text>
-                      <Text style={styles.battleTimer}>14:02:10</Text>
-                      <Text style={styles.battleDate}>TOMORROW</Text>
-                    </View>
-                    <View style={styles.battleCreator}>
+                </View>
+                <Text style={styles.battleSubtitle}>Monetto Airlines</Text>
+
+                <View style={styles.battleContent}>
+                  {/* Left - You */}
+                  <View style={styles.battlePlayer}>
+                    <Image
+                      source={{ uri: profileImageUrl }}
+                      style={styles.battleAvatar}
+                    />
+                    <Text style={styles.battlePlayerName}>You</Text>
+                  </View>
+
+                  {/* Center - Timer */}
+                  <View style={styles.battleCenter}>
+                    <Text style={styles.battleTimerLabel}>ENDS IN</Text>
+                    <Text style={styles.battleTimer}>14:02:10</Text>
+                    <Text style={styles.battleDate}>TOMORROW</Text>
+                  </View>
+
+                  {/* Right - Opponent */}
+                  <View style={styles.battlePlayer}>
+                    <View style={styles.battleAvatarContainer}>
                       <Image
                         source={{ uri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop' }}
                         style={styles.battleAvatar}
                       />
-                      <View style={styles.battleProBadge}>
-                        <Text style={styles.battleProBadgeText}>PRO</Text>
+                      <View style={styles.proBadge}>
+                        <Text style={styles.proBadgeText}>PRO</Text>
                       </View>
-                      <Text style={styles.battleCreatorName}>@AlexD</Text>
                     </View>
-                  </View>
-                  <View style={styles.battleFooter}>
-                    <Text style={styles.battlePoints}>••••• 1001</Text>
+                    <Text style={styles.battlePlayerName}>@AlexD</Text>
+                    <Text style={styles.battlePlayerStats}>••••• 1001</Text>
                   </View>
                 </View>
-              </CardPressable>
-            )}
+              </View>
+            </CardPressable>
+
+            {/* Bottom Spacing */}
+            <View style={{ height: 40 }} />
           </Animated.View>
         </ScrollView>
       </View>
@@ -509,7 +570,7 @@ function CardPressable({ children, onPress }: { children: React.ReactNode; onPre
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#0F0F0F',
   },
   centerContent: {
     justifyContent: 'center',
@@ -519,12 +580,12 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     fontFamily: 'Poppins_500Medium',
-    color: colors.textSecondary,
+    color: '#A0A0A0',
   },
   errorText: {
     fontSize: 16,
     fontFamily: 'Poppins_500Medium',
-    color: colors.error,
+    color: '#EF4444',
     textAlign: 'center',
     paddingHorizontal: 32,
     marginBottom: 16,
@@ -548,26 +609,28 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingTop: 60,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingBottom: 120,
   },
+
+  // HEADER STYLES
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   headerLeft: {
     flexDirection: 'row',
     flex: 1,
   },
   headerAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     marginRight: 12,
-    borderWidth: 2,
-    borderColor: colors.primary,
+    borderWidth: 3,
+    borderColor: '#8B5CF6',
   },
   headerInfo: {
     flex: 1,
@@ -575,14 +638,33 @@ const styles = StyleSheet.create({
   headerGreeting: {
     fontSize: 14,
     fontFamily: 'Poppins_400Regular',
-    color: colors.textSecondary,
+    color: '#FFFFFF',
     marginBottom: 2,
   },
+  headerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   headerName: {
-    fontSize: 20,
+    fontSize: 18,
     fontFamily: 'Poppins_700Bold',
-    color: colors.text,
-    marginBottom: 6,
+    color: '#FFFFFF',
+  },
+  headerEmoji: {
+    fontSize: 18,
+  },
+  goldBadge: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  goldBadgeText: {
+    fontSize: 11,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
   headerBadges: {
     flexDirection: 'row',
@@ -590,7 +672,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   headerBadge: {
-    backgroundColor: colors.grey,
+    backgroundColor: '#2A2A2A',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
@@ -598,14 +680,14 @@ const styles = StyleSheet.create({
   headerBadgeText: {
     fontSize: 11,
     fontFamily: 'Poppins_500Medium',
-    color: colors.text,
+    color: '#FFFFFF',
   },
   headerRegions: {
     flexDirection: 'row',
     gap: 6,
   },
   regionBadge: {
-    backgroundColor: colors.grey,
+    backgroundColor: '#2A2A2A',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
@@ -613,56 +695,60 @@ const styles = StyleSheet.create({
   regionBadgeText: {
     fontSize: 11,
     fontFamily: 'Poppins_500Medium',
-    color: colors.textSecondary,
+    color: '#A0A0A0',
   },
-  headerIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.grey,
+  headerIconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#2A2A2A',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  diamondsCard: {
+
+  // MAIN DIAMOND CARD
+  mainCard: {
     borderRadius: 24,
     padding: 20,
     marginBottom: 16,
   },
-  diamondsHeader: {
+  mainCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 20,
   },
-  diamondsLeft: {
-    flex: 1,
-  },
-  diamondsLabel: {
-    fontSize: 12,
+  goalLabel: {
+    fontSize: 11,
     fontFamily: 'Poppins_600SemiBold',
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginBottom: 8,
+    color: 'rgba(255, 255, 255, 0.9)',
     letterSpacing: 0.5,
   },
-  diamondsValue: {
-    fontSize: 48,
-    fontFamily: 'Poppins_700Bold',
-    color: '#FFFFFF',
-    letterSpacing: -1,
-  },
-  diamondsRight: {
-    alignItems: 'flex-end',
-  },
   silverBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
   },
   silverBadgeText: {
     fontSize: 12,
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins_700Bold',
     color: '#FFFFFF',
+  },
+  diamondsSection: {
+    marginBottom: 24,
+  },
+  diamondsValue: {
+    fontSize: 56,
+    fontFamily: 'Poppins_800ExtraBold',
+    color: '#FFFFFF',
+    letterSpacing: -2,
+    marginBottom: 4,
+  },
+  diamondsLabel: {
+    fontSize: 14,
+    fontFamily: 'Poppins_500Medium',
+    color: 'rgba(255, 255, 255, 0.9)',
   },
   progressSection: {
     marginBottom: 20,
@@ -672,13 +758,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 8,
   },
-  progressTitle: {
-    fontSize: 14,
+  progressLabel: {
+    fontSize: 13,
     fontFamily: 'Poppins_500Medium',
     color: 'rgba(255, 255, 255, 0.9)',
   },
   progressRemaining: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Poppins_500Medium',
     color: 'rgba(255, 255, 255, 0.9)',
   },
@@ -694,94 +780,131 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
   },
-  progressFooter: {
+  nextTierContainer: {
+    alignItems: 'flex-end',
+  },
+  nextTierLabel: {
+    fontSize: 11,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FCD34D',
+    letterSpacing: 0.5,
+  },
+
+  // BONUS FORECAST CARD
+  bonusForecastCard: {
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    borderRadius: 20,
+    padding: 16,
+  },
+  bonusForecastHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
   },
-  progressLabel: {
-    fontSize: 11,
-    fontFamily: 'Poppins_500Medium',
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginBottom: 4,
-  },
-  progressValue: {
+  bonusForecastTitle: {
     fontSize: 16,
     fontFamily: 'Poppins_700Bold',
     color: '#FFFFFF',
-  },
-  progressRight: {
-    alignItems: 'flex-end',
-  },
-  bonusSection: {
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderRadius: 16,
-    padding: 16,
-  },
-  bonusTitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins_600SemiBold',
-    color: 'rgba(255, 255, 255, 0.9)',
     marginBottom: 4,
   },
-  bonusSubtitle: {
-    fontSize: 13,
-    fontFamily: 'Poppins_400Regular',
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginBottom: 8,
-  },
-  bonusNext: {
-    fontSize: 13,
-    fontFamily: 'Poppins_500Medium',
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginBottom: 8,
-  },
-  bonusProgressBar: {
-    height: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 6,
-    overflow: 'hidden',
-    marginBottom: 12,
-  },
-  bonusProgressFill: {
-    height: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 6,
-  },
-  bonusRequirements: {
-    marginTop: 8,
-  },
-  bonusRequirement: {
-    fontSize: 11,
-    fontFamily: 'Poppins_600SemiBold',
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginBottom: 8,
-    letterSpacing: 0.5,
-  },
-  bonusStats: {
-    gap: 8,
-  },
-  bonusStat: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  bonusStatLabel: {
+  bonusForecastSubtitle: {
     fontSize: 13,
     fontFamily: 'Poppins_400Regular',
     color: 'rgba(255, 255, 255, 0.8)',
   },
-  bonusStatValue: {
-    fontSize: 13,
+  bonusAmountContainer: {
+    alignItems: 'flex-end',
+  },
+  bonusAmount: {
+    fontSize: 32,
+    fontFamily: 'Poppins_800ExtraBold',
+    color: '#FFFFFF',
+    letterSpacing: -1,
+  },
+  bonusNextLabel: {
+    fontSize: 10,
     fontFamily: 'Poppins_600SemiBold',
+    color: '#10B981',
+    letterSpacing: 0.5,
+  },
+  requirementsSection: {
+    marginBottom: 16,
+  },
+  requirementsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  requirementsLabel: {
+    fontSize: 11,
+    fontFamily: 'Poppins_600SemiBold',
+    color: 'rgba(255, 255, 255, 0.8)',
+    letterSpacing: 0.5,
+  },
+  requirementsPercentage: {
+    fontSize: 14,
+    fontFamily: 'Poppins_700Bold',
     color: '#FFFFFF',
   },
-  card: {
-    backgroundColor: colors.backgroundAlt,
+  requirementsProgressBar: {
+    height: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  requirementsProgressFill: {
+    height: '100%',
+    backgroundColor: '#FCD34D',
+    borderRadius: 6,
+  },
+  requirementsStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  requirementStat: {
+    flex: 1,
+  },
+  requirementStatLabel: {
+    fontSize: 10,
+    fontFamily: 'Poppins_500Medium',
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginBottom: 4,
+    letterSpacing: 0.3,
+  },
+  requirementStatValue: {
+    fontSize: 14,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
+  },
+  requirementStatValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  checkmarkCircle: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#10B981',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkmark: {
+    fontSize: 10,
+    color: '#FFFFFF',
+    fontFamily: 'Poppins_700Bold',
+  },
+
+  // DARK CARD STYLES
+  darkCard: {
+    backgroundColor: '#1A1A1A',
     borderRadius: 24,
     padding: 20,
     marginBottom: 16,
   },
-  cardHeader: {
+  cardHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -792,49 +915,68 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  cardTitle: {
-    fontSize: 18,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.text,
+  pendingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#8B5CF6',
   },
-  pendingBadge: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  pendingBadgeText: {
+  pendingText: {
     fontSize: 11,
     fontFamily: 'Poppins_600SemiBold',
-    color: '#FFFFFF',
+    color: '#A0A0A0',
+    letterSpacing: 0.5,
   },
+  circularProgress: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 3,
+    borderColor: '#8B5CF6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+  },
+  circularProgressText: {
+    fontSize: 12,
+    fontFamily: 'Poppins_700Bold',
+    color: '#8B5CF6',
+  },
+  cardTitle: {
+    fontSize: 20,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
+    marginBottom: 16,
+  },
+
+  // 21-DAY CHALLENGE
   challengeDays: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 16,
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    paddingHorizontal: 8,
   },
   challengeDay: {
     alignItems: 'center',
   },
-  challengeDayActive: {
-    opacity: 1,
-  },
   challengeDayCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.grey,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
   },
-  challengeDayCircleActive: {
-    backgroundColor: colors.primary,
+  challengeDayCompleted: {
+    backgroundColor: '#8B5CF6',
+  },
+  challengeDayActive: {
+    backgroundColor: '#8B5CF6',
     borderWidth: 3,
     borderColor: 'rgba(139, 92, 246, 0.3)',
   },
-  challengeDayCircleLocked: {
-    opacity: 0.5,
+  challengeDayLocked: {
+    backgroundColor: '#2A2A2A',
   },
   challengeDayNumber: {
     fontSize: 20,
@@ -844,41 +986,38 @@ const styles = StyleSheet.create({
   challengeDayLabel: {
     fontSize: 12,
     fontFamily: 'Poppins_500Medium',
-    color: colors.textSecondary,
+    color: '#FFFFFF',
+  },
+  challengeDayLabelLocked: {
+    fontSize: 12,
+    fontFamily: 'Poppins_500Medium',
+    color: '#707070',
   },
   continueButton: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#2A2A2A',
     borderRadius: 16,
-    padding: 14,
+    padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
+    gap: 8,
   },
   continueButtonText: {
     fontSize: 15,
     fontFamily: 'Poppins_600SemiBold',
-    color: colors.background,
+    color: '#FFFFFF',
   },
-  quizBadge: {
-    backgroundColor: colors.grey,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  quizBadgeText: {
-    fontSize: 11,
-    fontFamily: 'Poppins_500Medium',
-    color: colors.textSecondary,
-  },
+
+  // ACADEMY CARD
   requiredBadge: {
-    backgroundColor: colors.error,
+    backgroundColor: '#8B5CF6',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
-    alignSelf: 'flex-start',
-    marginBottom: 12,
   },
   requiredBadgeText: {
     fontSize: 10,
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins_700Bold',
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
@@ -889,169 +1028,210 @@ const styles = StyleSheet.create({
   academyLeft: {
     flex: 1,
   },
-  academyProgress: {
+  academyProgressLabel: {
     fontSize: 13,
     fontFamily: 'Poppins_500Medium',
-    color: colors.textSecondary,
+    color: '#A0A0A0',
     marginBottom: 4,
   },
-  academyVideos: {
-    fontSize: 16,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.text,
-    marginBottom: 8,
+  academyProgressValue: {
+    fontSize: 18,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
+    marginBottom: 12,
   },
   academyProgressBar: {
     height: 6,
-    backgroundColor: colors.grey,
+    backgroundColor: '#2A2A2A',
     borderRadius: 6,
     overflow: 'hidden',
     marginBottom: 12,
   },
   academyProgressFill: {
     height: '100%',
+    backgroundColor: '#8B5CF6',
     borderRadius: 6,
   },
-  continueLink: {
-    marginTop: 4,
+  quizStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
   },
-  continueLinkText: {
+  quizStatusText: {
+    fontSize: 12,
+    fontFamily: 'Poppins_500Medium',
+    color: '#A0A0A0',
+  },
+  continueLink: {
     fontSize: 13,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.primary,
+    fontFamily: 'Poppins_700Bold',
+    color: '#8B5CF6',
   },
   academyRight: {
-    position: 'relative',
-  },
-  academyThumbnail: {
     width: 100,
     height: 100,
-    borderRadius: 12,
   },
-  playButton: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    transform: [{ translateX: -20 }, { translateY: -20 }],
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  videoThumbnail: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#2A2A2A',
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  managerAvatar: {
+  playIconContainer: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    marginRight: 12,
-  },
-  managerLabel: {
-    fontSize: 11,
-    fontFamily: 'Poppins_500Medium',
-    color: colors.textSecondary,
-    marginBottom: 2,
-  },
-  managerName: {
-    fontSize: 16,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  managerStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  managerStatusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.success,
-  },
-  emailButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.grey,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
+
+  // MANAGER CARD
+  managerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  managerLeft: {
+    position: 'relative',
+    marginRight: 12,
+  },
+  managerAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+  },
+  managerOnlineIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#10B981',
+    borderWidth: 2,
+    borderColor: '#1A1A1A',
+  },
+  managerInfo: {
+    flex: 1,
+  },
+  managerLabel: {
+    fontSize: 10,
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#A0A0A0',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  managerName: {
+    fontSize: 16,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
+  },
+  emailButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#2A2A2A',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // VS BATTLE CARD
   battleHeader: {
-    marginBottom: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
   },
   battleTitle: {
-    fontSize: 18,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.text,
-    marginBottom: 4,
+    fontSize: 20,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
+  },
+  battlePointsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  battlePoints: {
+    fontSize: 14,
+    fontFamily: 'Poppins_700Bold',
+    color: '#8B5CF6',
   },
   battleSubtitle: {
     fontSize: 13,
     fontFamily: 'Poppins_400Regular',
-    color: colors.textSecondary,
+    color: '#A0A0A0',
+    marginBottom: 20,
   },
   battleContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
   },
-  battleCreator: {
+  battlePlayer: {
     alignItems: 'center',
     flex: 1,
   },
-  battleAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  battleAvatarContainer: {
+    position: 'relative',
     marginBottom: 8,
-    borderWidth: 2,
-    borderColor: colors.primary,
   },
-  battleCreatorName: {
+  battleAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    marginBottom: 8,
+  },
+  proBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#8B5CF6',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  proBadgeText: {
+    fontSize: 10,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
+  },
+  battlePlayerName: {
     fontSize: 13,
     fontFamily: 'Poppins_600SemiBold',
-    color: colors.text,
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  battlePlayerStats: {
+    fontSize: 11,
+    fontFamily: 'Poppins_500Medium',
+    color: '#707070',
   },
   battleCenter: {
     alignItems: 'center',
     flex: 1,
   },
-  battleStarting: {
-    fontSize: 11,
-    fontFamily: 'Poppins_500Medium',
-    color: colors.textSecondary,
+  battleTimerLabel: {
+    fontSize: 10,
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#A0A0A0',
+    letterSpacing: 0.5,
     marginBottom: 4,
   },
   battleTimer: {
     fontSize: 24,
-    fontFamily: 'Poppins_700Bold',
-    color: colors.text,
+    fontFamily: 'Poppins_800ExtraBold',
+    color: '#FFFFFF',
+    letterSpacing: -1,
     marginBottom: 4,
   },
   battleDate: {
-    fontSize: 11,
-    fontFamily: 'Poppins_500Medium',
-    color: colors.textSecondary,
-  },
-  battleProBadge: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-    marginBottom: 4,
-  },
-  battleProBadgeText: {
     fontSize: 10,
     fontFamily: 'Poppins_600SemiBold',
-    color: '#FFFFFF',
-  },
-  battleFooter: {
-    alignItems: 'center',
-  },
-  battlePoints: {
-    fontSize: 13,
-    fontFamily: 'Poppins_500Medium',
-    color: colors.textSecondary,
+    color: '#A0A0A0',
+    letterSpacing: 0.5,
   },
 });
