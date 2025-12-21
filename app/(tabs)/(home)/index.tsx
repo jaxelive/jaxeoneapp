@@ -19,6 +19,7 @@ import { HeaderRightButton, HeaderLeftButton } from "@/components/HeaderButtons"
 import { useCreatorData } from "@/hooks/useCreatorData";
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold, Poppins_800ExtraBold } from '@expo-google-fonts/poppins';
 import { supabase } from "@/app/integrations/supabase/client";
+import { RotatingCard } from "@/components/RotatingCard";
 
 const { width } = Dimensions.get('window');
 
@@ -243,89 +244,38 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* MAIN DIAMOND CARD WITH GRADIENT */}
-            <CardPressable onPress={() => console.log('Diamonds tapped')}>
-              <LinearGradient
-                colors={['#7C3AED', '#9333EA', '#A855F7']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.mainCard}
-              >
-                {/* Top Section - Goal and Badge */}
-                <View style={styles.mainCardHeader}>
-                  <Text style={styles.goalLabel}>TOTAL GOAL: 200,000</Text>
-                  <View style={styles.silverBadge}>
-                    <Text style={styles.silverBadgeText}>Silver ⭐</Text>
-                  </View>
-                </View>
+            {/* ROTATING CARDS SECTION */}
+            <View style={styles.rotatingCardsContainer}>
+              {/* Back Card (Faded) */}
+              <View style={styles.backCard}>
+                <RotatingCard
+                  type="diamonds"
+                  isFaded={true}
+                  onPress={() => console.log('Diamonds card tapped')}
+                  data={{
+                    diamondsEarned: 15000,
+                    totalGoal: 200000,
+                    remaining: 185000,
+                    nextTier: 'Silver',
+                  }}
+                />
+              </View>
 
-                {/* Diamonds Earned */}
-                <View style={styles.diamondsSection}>
-                  <Text style={styles.diamondsValue}>15,000</Text>
-                  <Text style={styles.diamondsLabel}>Diamonds Earned 💎</Text>
-                </View>
-
-                {/* Progress Bar */}
-                <View style={styles.progressSection}>
-                  <View style={styles.progressHeader}>
-                    <Text style={styles.progressLabel}>Progress to Goal</Text>
-                    <Text style={styles.progressRemaining}>Remaining: 185,000</Text>
-                  </View>
-                  <View style={styles.progressBarContainer}>
-                    <View style={[styles.progressBarFill, { width: '7.5%' }]} />
-                  </View>
-                  <View style={styles.nextTierContainer}>
-                    <Text style={styles.nextTierLabel}>NEXT TIER: SILVER</Text>
-                  </View>
-                </View>
-
-                {/* Bonus Forecast Section */}
-                <View style={styles.bonusForecastCard}>
-                  <View style={styles.bonusForecastHeader}>
-                    <View>
-                      <Text style={styles.bonusForecastTitle}>Bonus Forecast</Text>
-                      <Text style={styles.bonusForecastSubtitle}>Upcoming bonus: $100</Text>
-                    </View>
-                    <View style={styles.bonusAmountContainer}>
-                      <Text style={styles.bonusAmount}>${bonusForecast}</Text>
-                      <Text style={styles.bonusNextLabel}>NEXT BONUS</Text>
-                    </View>
-                  </View>
-
-                  {/* Requirements Met Progress */}
-                  <View style={styles.requirementsSection}>
-                    <View style={styles.requirementsHeader}>
-                      <Text style={styles.requirementsLabel}>REQUIREMENTS MET</Text>
-                      <Text style={styles.requirementsPercentage}>{overallRequirements}%</Text>
-                    </View>
-                    <View style={styles.requirementsProgressBar}>
-                      <View style={[styles.requirementsProgressFill, { width: `${overallRequirements}%` }]} />
-                    </View>
-                  </View>
-
-                  {/* Requirements Stats */}
-                  <View style={styles.requirementsStats}>
-                    <View style={styles.requirementStat}>
-                      <Text style={styles.requirementStatLabel}>LIVE DAYS</Text>
-                      <Text style={styles.requirementStatValue}>{stats.liveDays}/5</Text>
-                    </View>
-                    <View style={styles.requirementStat}>
-                      <Text style={styles.requirementStatLabel}>HOURS</Text>
-                      <Text style={styles.requirementStatValue}>{stats.liveHours}/10</Text>
-                    </View>
-                    <View style={styles.requirementStat}>
-                      <Text style={styles.requirementStatLabel}>BATTLES</Text>
-                      <View style={styles.requirementStatValueRow}>
-                        <Text style={styles.requirementStatValue}>1/1</Text>
-                        <View style={styles.checkmarkCircle}>
-                          <Text style={styles.checkmark}>✓</Text>
-                        </View>
-                      </View>
-                    </View>
-                  </View>
-                </View>
-              </LinearGradient>
-            </CardPressable>
+              {/* Front Card */}
+              <View style={styles.frontCard}>
+                <RotatingCard
+                  type="bonus"
+                  onPress={() => console.log('Bonus card tapped')}
+                  data={{
+                    bonusAmount: 100,
+                    nextBonus: 175,
+                    liveDays: stats.liveDays,
+                    liveHours: stats.liveHours,
+                    battlesBooked: 1,
+                  }}
+                />
+              </View>
+            </View>
 
             {/* 21-DAY CHALLENGE CARD */}
             <CardPressable onPress={() => router.push('/(tabs)/missions')}>
@@ -706,195 +656,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  // MAIN DIAMOND CARD
-  mainCard: {
-    borderRadius: 24,
-    padding: 20,
+  // ROTATING CARDS CONTAINER
+  rotatingCardsContainer: {
+    position: 'relative',
     marginBottom: 16,
+    height: 520,
   },
-  mainCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
+  backCard: {
+    position: 'absolute',
+    top: 12,
+    left: 0,
+    right: 0,
+    zIndex: 1,
   },
-  goalLabel: {
-    fontSize: 11,
-    fontFamily: 'Poppins_600SemiBold',
-    color: 'rgba(255, 255, 255, 0.9)',
-    letterSpacing: 0.5,
-  },
-  silverBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  silverBadgeText: {
-    fontSize: 12,
-    fontFamily: 'Poppins_700Bold',
-    color: '#FFFFFF',
-  },
-  diamondsSection: {
-    marginBottom: 24,
-  },
-  diamondsValue: {
-    fontSize: 56,
-    fontFamily: 'Poppins_800ExtraBold',
-    color: '#FFFFFF',
-    letterSpacing: -2,
-    marginBottom: 4,
-  },
-  diamondsLabel: {
-    fontSize: 14,
-    fontFamily: 'Poppins_500Medium',
-    color: 'rgba(255, 255, 255, 0.9)',
-  },
-  progressSection: {
-    marginBottom: 20,
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  progressLabel: {
-    fontSize: 13,
-    fontFamily: 'Poppins_500Medium',
-    color: 'rgba(255, 255, 255, 0.9)',
-  },
-  progressRemaining: {
-    fontSize: 13,
-    fontFamily: 'Poppins_500Medium',
-    color: 'rgba(255, 255, 255, 0.9)',
-  },
-  progressBarContainer: {
-    height: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 8,
-    overflow: 'hidden',
-    marginBottom: 12,
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-  },
-  nextTierContainer: {
-    alignItems: 'flex-end',
-  },
-  nextTierLabel: {
-    fontSize: 11,
-    fontFamily: 'Poppins_700Bold',
-    color: '#FCD34D',
-    letterSpacing: 0.5,
-  },
-
-  // BONUS FORECAST CARD
-  bonusForecastCard: {
-    backgroundColor: 'rgba(0, 0, 0, 0.25)',
-    borderRadius: 20,
-    padding: 16,
-  },
-  bonusForecastHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  bonusForecastTitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins_700Bold',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  bonusForecastSubtitle: {
-    fontSize: 13,
-    fontFamily: 'Poppins_400Regular',
-    color: 'rgba(255, 255, 255, 0.8)',
-  },
-  bonusAmountContainer: {
-    alignItems: 'flex-end',
-  },
-  bonusAmount: {
-    fontSize: 32,
-    fontFamily: 'Poppins_800ExtraBold',
-    color: '#FFFFFF',
-    letterSpacing: -1,
-  },
-  bonusNextLabel: {
-    fontSize: 10,
-    fontFamily: 'Poppins_600SemiBold',
-    color: '#10B981',
-    letterSpacing: 0.5,
-  },
-  requirementsSection: {
-    marginBottom: 16,
-  },
-  requirementsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  requirementsLabel: {
-    fontSize: 11,
-    fontFamily: 'Poppins_600SemiBold',
-    color: 'rgba(255, 255, 255, 0.8)',
-    letterSpacing: 0.5,
-  },
-  requirementsPercentage: {
-    fontSize: 14,
-    fontFamily: 'Poppins_700Bold',
-    color: '#FFFFFF',
-  },
-  requirementsProgressBar: {
-    height: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 6,
-    overflow: 'hidden',
-  },
-  requirementsProgressFill: {
-    height: '100%',
-    backgroundColor: '#FCD34D',
-    borderRadius: 6,
-  },
-  requirementsStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  requirementStat: {
-    flex: 1,
-  },
-  requirementStatLabel: {
-    fontSize: 10,
-    fontFamily: 'Poppins_500Medium',
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginBottom: 4,
-    letterSpacing: 0.3,
-  },
-  requirementStatValue: {
-    fontSize: 14,
-    fontFamily: 'Poppins_700Bold',
-    color: '#FFFFFF',
-  },
-  requirementStatValueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  checkmarkCircle: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#10B981',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkmark: {
-    fontSize: 10,
-    color: '#FFFFFF',
-    fontFamily: 'Poppins_700Bold',
+  frontCard: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 2,
   },
 
   // DARK CARD STYLES
