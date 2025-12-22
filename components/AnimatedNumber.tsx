@@ -1,14 +1,13 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Text, TextStyle } from 'react-native';
 import Animated, {
   useSharedValue,
-  useAnimatedProps,
+  useAnimatedReaction,
   withTiming,
   Easing,
+  runOnJS,
 } from 'react-native-reanimated';
-
-const AnimatedText = Animated.createAnimatedComponent(Text);
 
 interface AnimatedNumberProps {
   value: number;
@@ -33,6 +32,7 @@ export function AnimatedNumber({
   suffix = '',
   formatNumber = true,
 }: AnimatedNumberProps) {
+  const [displayValue, setDisplayValue] = useState(value);
   const animatedValue = useSharedValue(value);
 
   useEffect(() => {
@@ -42,16 +42,21 @@ export function AnimatedNumber({
     });
   }, [value]);
 
-  const animatedProps = useAnimatedProps(() => {
-    const currentValue = animatedValue.value;
-    const formattedValue = formatNumber
-      ? Math.round(currentValue).toLocaleString()
-      : currentValue.toFixed(decimals);
-    
-    return {
-      text: `${prefix}${formattedValue}${suffix}`,
-    } as any;
-  });
+  // Update display value on animation frame
+  useAnimatedReaction(
+    () => animatedValue.value,
+    (currentValue) => {
+      runOnJS(setDisplayValue)(currentValue);
+    }
+  );
 
-  return <AnimatedText style={style} animatedProps={animatedProps} />;
+  const formattedValue = formatNumber
+    ? Math.round(displayValue).toLocaleString()
+    : displayValue.toFixed(decimals);
+
+  return (
+    <Text style={style}>
+      {prefix}{formattedValue}{suffix}
+    </Text>
+  );
 }
