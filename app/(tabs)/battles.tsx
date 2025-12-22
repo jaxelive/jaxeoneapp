@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Platform, Image } from 'react-native';
 import { Stack } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -42,6 +42,7 @@ export default function BattlesScreen() {
   const [availableCreators, setAvailableCreators] = useState<BattleAvailability[]>([]);
   const [upcomingBattles, setUpcomingBattles] = useState<BattleCalendar[]>([]);
   const [loading, setLoading] = useState(false);
+  const [myAvailability, setMyAvailability] = useState<BattleAvailability[]>([]);
   
   // Manual battle input
   const [manualOpponent, setManualOpponent] = useState('');
@@ -55,6 +56,7 @@ export default function BattlesScreen() {
       fetchAvailableCreators();
     }
     fetchUpcomingBattles();
+    fetchMyAvailability();
   }, [activeTab, creator]);
 
   const fetchAvailableCreators = async () => {
@@ -117,6 +119,26 @@ export default function BattlesScreen() {
       setUpcomingBattles(data || []);
     } catch (error: any) {
       console.error('Error fetching battles:', error);
+    }
+  };
+
+  const fetchMyAvailability = async () => {
+    if (!creator) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('battles_availability')
+        .select('*')
+        .eq('creator_id', creator.id)
+        .eq('is_booked', false)
+        .gte('available_date', new Date().toISOString().split('T')[0])
+        .order('available_date', { ascending: true })
+        .limit(3);
+
+      if (error) throw error;
+      setMyAvailability(data || []);
+    } catch (error: any) {
+      console.error('Error fetching my availability:', error);
     }
   };
 
@@ -292,7 +314,7 @@ export default function BattlesScreen() {
             onPress={() => setActiveTab('view')}
           >
             <Text style={[styles.tabText, activeTab === 'view' && styles.activeTabText]}>
-              Find Battles
+              Find Opponents
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -382,7 +404,7 @@ export default function BattlesScreen() {
         {/* View Creator Availability Tab */}
         {activeTab === 'view' && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Available Creators</Text>
+            <Text style={styles.sectionTitle}>Find Opponents</Text>
             
             {loading ? (
               <Text style={styles.loadingText}>Loading...</Text>
@@ -394,6 +416,12 @@ export default function BattlesScreen() {
             ) : (
               availableCreators.map((item) => (
                 <View key={item.id} style={styles.creatorCard}>
+                  <View style={styles.creatorAvatar}>
+                    <Image
+                      source={{ uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&h=200&fit=crop' }}
+                      style={styles.creatorAvatarImage}
+                    />
+                  </View>
                   <View style={styles.creatorInfo}>
                     <Text style={styles.creatorHandle}>@{item.creator_handle}</Text>
                     <Text style={styles.creatorName}>{item.creator_name}</Text>
@@ -483,6 +511,30 @@ export default function BattlesScreen() {
                 {loading ? 'Logging...' : 'Log Battle'}
               </Text>
             </TouchableOpacity>
+          </View>
+        )}
+
+        {/* My Availability */}
+        {myAvailability.length > 0 && creator && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>My Availability</Text>
+            {myAvailability.map((availability) => (
+              <View key={availability.id} style={styles.myAvailabilityCard}>
+                <View style={styles.myAvailabilityLeft}>
+                  <Image
+                    source={{ uri: creator.avatar_url || creator.profile_picture_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&h=200&fit=crop' }}
+                    style={styles.myAvailabilityAvatar}
+                  />
+                </View>
+                <View style={styles.myAvailabilityInfo}>
+                  <Text style={styles.myAvailabilityName}>@{creator.creator_handle}</Text>
+                  <Text style={styles.myAvailabilityDetails}>
+                    {formatDate(availability.available_date)} • {formatTime(availability.start_time)}
+                  </Text>
+                  <Text style={styles.myAvailabilityDuration}>{availability.duration_minutes} minutes</Text>
+                </View>
+              </View>
+            ))}
           </View>
         )}
 
@@ -643,8 +695,18 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
+  },
+  creatorAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    overflow: 'hidden',
+  },
+  creatorAvatarImage: {
+    width: '100%',
+    height: '100%',
   },
   creatorInfo: {
     flex: 1,
@@ -721,5 +783,44 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
     textTransform: 'capitalize',
+  },
+  myAvailabilityCard: {
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  myAvailabilityLeft: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    overflow: 'hidden',
+  },
+  myAvailabilityAvatar: {
+    width: '100%',
+    height: '100%',
+  },
+  myAvailabilityInfo: {
+    flex: 1,
+  },
+  myAvailabilityName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  myAvailabilityDetails: {
+    fontSize: 14,
+    color: colors.text,
+    marginBottom: 4,
+  },
+  myAvailabilityDuration: {
+    fontSize: 12,
+    color: colors.textTertiary,
   },
 });

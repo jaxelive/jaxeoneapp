@@ -1,6 +1,6 @@
 
-import React, { useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 import { IconSymbol } from './IconSymbol';
 import { AnimatedNumber } from './AnimatedNumber';
 import { AnimatedProgressBar } from './AnimatedProgressBar';
@@ -23,51 +23,7 @@ interface RotatingCardProps {
 }
 
 export function RotatingCard({ type, isFaded = false, onPress, data }: RotatingCardProps) {
-  const rotateAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 0.95,
-        useNativeDriver: true,
-      }),
-      Animated.spring(rotateAnim, {
-        toValue: 1,
-        friction: 8,
-        tension: 40,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        friction: 4,
-        tension: 50,
-        useNativeDriver: true,
-      }),
-      Animated.spring(rotateAnim, {
-        toValue: 0,
-        friction: 8,
-        tension: 40,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
-
-  const rotateInterpolate = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '5deg'],
-  });
-
   const cardStyle = {
-    transform: [
-      { scale: scaleAnim },
-      { rotate: rotateInterpolate },
-    ],
     opacity: isFaded ? 0.4 : 1,
   };
 
@@ -79,12 +35,7 @@ export function RotatingCard({ type, isFaded = false, onPress, data }: RotatingC
     const requirementsPercentage = (requirementsMet / 3) * 100;
 
     return (
-      <TouchableOpacity
-        activeOpacity={1}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        onPress={onPress}
-      >
+      <View>
         <Animated.View style={[styles.card, cardStyle]}>
           {/* Header */}
           <View style={styles.bonusHeader}>
@@ -206,17 +157,8 @@ export function RotatingCard({ type, isFaded = false, onPress, data }: RotatingC
             </View>
           </View>
 
-          {/* Details Icon */}
-          <TouchableOpacity style={styles.detailsIcon} onPress={onPress}>
-            <IconSymbol 
-              ios_icon_name="info.circle.fill" 
-              android_material_icon_name="info" 
-              size={24} 
-              color="rgba(255, 255, 255, 0.8)" 
-            />
-          </TouchableOpacity>
         </Animated.View>
-      </TouchableOpacity>
+      </View>
     );
   }
 
@@ -224,12 +166,7 @@ export function RotatingCard({ type, isFaded = false, onPress, data }: RotatingC
   const progressPercentage = ((data.diamondsEarned || 0) / (data.totalGoal || 200000)) * 100;
 
   return (
-    <TouchableOpacity
-      activeOpacity={1}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      onPress={onPress}
-    >
+    <View>
       <Animated.View style={[styles.card, cardStyle]}>
         {/* Header with Diamonds Number at Top-Left */}
         <View style={styles.diamondsHeader}>
@@ -283,17 +220,8 @@ export function RotatingCard({ type, isFaded = false, onPress, data }: RotatingC
           </View>
         </View>
 
-        {/* Details Icon */}
-        <TouchableOpacity style={styles.detailsIcon} onPress={onPress}>
-          <IconSymbol 
-            ios_icon_name="info.circle.fill" 
-            android_material_icon_name="info" 
-            size={24} 
-            color="rgba(255, 255, 255, 0.8)" 
-          />
-        </TouchableOpacity>
       </Animated.View>
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -536,14 +464,5 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: 'Poppins_700Bold',
     color: '#FCD34D',
-  },
-  detailsIcon: {
-    position: 'absolute',
-    top: 24,
-    right: 24,
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
 });

@@ -7,6 +7,7 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
@@ -112,6 +113,39 @@ export default function ChallengeListScreen() {
       pathname: '/(tabs)/challenge-day-details',
       params: { dayId: day.id, dayNumber: day.day_number.toString() },
     });
+  };
+
+  const handleMarkComplete = async (day: ChallengeDay, event: any) => {
+    event.stopPropagation();
+    
+    if (!creator) return;
+
+    const status = getDayStatus(day.day_number);
+    if (status === 'locked' || status === 'completed') {
+      return;
+    }
+
+    try {
+      // Mark day as completed
+      const { error } = await supabase
+        .from('user_day_progress')
+        .upsert({
+          user_id: creator.id,
+          day_number: day.day_number,
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+        }, {
+          onConflict: 'user_id,day_number',
+        });
+
+      if (error) throw error;
+
+      // Refresh data
+      await fetchChallengeData();
+    } catch (error: any) {
+      console.error('Error marking day complete:', error);
+      Alert.alert('Error', 'Failed to mark day as complete');
+    }
   };
 
   const completedCount = progress.filter((p) => p.status === 'completed').length;
@@ -244,16 +278,26 @@ export default function ChallengeListScreen() {
                     <View style={styles.dayMeta}>
                       <View style={styles.dayMetaItem}>
                         <IconSymbol
-                          ios_icon_name="clock"
+                          ios_icon_name="clock.fill"
                           android_material_icon_name="access-time"
                           size={14}
-                          color={isLocked ? '#707070' : '#A0A0A0'}
+                          color={isLocked ? '#707070' : '#6642EF'}
                         />
-                        <Text style={[styles.dayMetaText, isLocked && styles.dayMetaTextLocked]}>
-                          {day.time_goal_live} min
+                        <Text style={[styles.dayMetaText, isLocked && styles.dayMetaTextLocked, !isLocked && styles.dayMetaTextHighlight]}>
+                          {day.time_goal_live} min LIVE
                         </Text>
                       </View>
                     </View>
+
+                    {/* Mark Complete Button */}
+                    {!isCompleted && !isLocked && (
+                      <TouchableOpacity
+                        style={styles.markCompleteButton}
+                        onPress={(e) => handleMarkComplete(day, e)}
+                      >
+                        <Text style={styles.markCompleteButtonText}>Mark Complete</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
 
                   {!isLocked && (
@@ -466,6 +510,23 @@ const styles = StyleSheet.create({
   },
   dayMetaTextLocked: {
     color: colors.textTertiary,
+  },
+  dayMetaTextHighlight: {
+    color: colors.primary,
+    fontFamily: 'Poppins_700Bold',
+  },
+  markCompleteButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginTop: 12,
+    alignSelf: 'flex-start',
+  },
+  markCompleteButtonText: {
+    fontSize: 13,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
   },
   dayCardRight: {
     width: 24,

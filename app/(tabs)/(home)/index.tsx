@@ -412,8 +412,22 @@ export default function HomeScreen() {
               )}
             </View>
 
+            {/* MY DIAMONDS & BONUS BUTTON */}
+            <TouchableOpacity 
+              style={styles.diamondsBonusButton}
+              onPress={() => router.push('/(tabs)/bonus-details')}
+            >
+              <Text style={styles.diamondsBonusButtonText}>My Diamonds & Bonus</Text>
+              <IconSymbol 
+                ios_icon_name="arrow.right" 
+                android_material_icon_name="arrow-forward" 
+                size={18} 
+                color="#FFFFFF" 
+              />
+            </TouchableOpacity>
+
             {/* EXTRA SPACING TO SHOW BONUS CARD FULLY */}
-            <View style={{ height: 80 }} />
+            <View style={{ height: 40 }} />
 
             {/* 21-DAY CHALLENGE CARD */}
             <CardPressable onPress={() => router.push('/(tabs)/challenge-list')}>
@@ -478,7 +492,10 @@ export default function HomeScreen() {
                 )}
 
                 {/* Continue Button */}
-                <TouchableOpacity style={styles.continueButton}>
+                <TouchableOpacity 
+                  style={styles.continueButton}
+                  onPress={() => router.push('/(tabs)/challenge-list')}
+                >
                   <Text style={styles.continueButtonText}>Continue Today&apos;s Task</Text>
                   <IconSymbol 
                     ios_icon_name="arrow.right" 
@@ -487,6 +504,16 @@ export default function HomeScreen() {
                     color="#FFFFFF" 
                   />
                 </TouchableOpacity>
+
+                {/* Start Challenge Button */}
+                {challengeProgress && challengeProgress.completedDays === 0 && (
+                  <TouchableOpacity 
+                    style={styles.startChallengeButton}
+                    onPress={() => router.push('/(tabs)/challenge-list')}
+                  >
+                    <Text style={styles.startChallengeButtonText}>Start Challenge</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </CardPressable>
 
@@ -897,8 +924,8 @@ const styles = StyleSheet.create({
   backCard: {
     position: 'absolute',
     top: 180,
-    left: 0,
-    right: 0,
+    left: '5%',
+    right: '5%',
     zIndex: 1,
   },
   frontCard: {
@@ -907,6 +934,21 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 2,
+  },
+  diamondsBonusButton: {
+    backgroundColor: '#6642EF',
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  diamondsBonusButtonText: {
+    fontSize: 16,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
   },
 
   // DARK CARD STYLES
@@ -1013,10 +1055,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
+    marginBottom: 12,
   },
   continueButtonText: {
     fontSize: 15,
     fontFamily: 'Poppins_600SemiBold',
+    color: '#FFFFFF',
+  },
+  startChallengeButton: {
+    backgroundColor: '#6642EF',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+  },
+  startChallengeButtonText: {
+    fontSize: 15,
+    fontFamily: 'Poppins_700Bold',
     color: '#FFFFFF',
   },
 

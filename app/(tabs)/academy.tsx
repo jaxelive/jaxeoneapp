@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
@@ -67,6 +68,7 @@ export default function AcademyScreen() {
   const [videoProgress, setVideoProgress] = useState<VideoProgress[]>([]);
   const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
   const [loading, setLoading] = useState(true);
+  const [topCreators, setTopCreators] = useState<any[]>([]);
 
   useEffect(() => {
     fetchAcademyData();
@@ -140,6 +142,20 @@ export default function AcademyScreen() {
       });
 
       setQuizAttempts(latestAttempts);
+
+      // Fetch top 5 creators by diamonds
+      const { data: topCreatorsData, error: topCreatorsError } = await supabase
+        .from('creators')
+        .select('creator_handle, total_diamonds, avatar_url, profile_picture_url')
+        .eq('is_active', true)
+        .order('total_diamonds', { ascending: false })
+        .limit(5);
+
+      if (topCreatorsError) {
+        console.error('Error fetching top creators:', topCreatorsError);
+      } else {
+        setTopCreators(topCreatorsData || []);
+      }
     } catch (error: any) {
       console.error('Error fetching academy data:', error);
       Alert.alert('Error', 'Failed to load academy content');
@@ -190,11 +206,9 @@ export default function AcademyScreen() {
     }
 
     if (item.content_type === 'video' && item.video) {
-      // Navigate to video player
-      router.push({
-        pathname: '/(tabs)/video-player',
-        params: { videoId: item.video.id },
-      });
+      // Videos are now played on the same screen - no navigation
+      // This will be handled by the video player component below
+      return;
     } else if (item.content_type === 'quiz' && item.quiz) {
       // Navigate to quiz (placeholder for now)
       Alert.alert('Quiz', `Starting quiz: ${item.quiz.title}\n\nQuiz would open here.`);
@@ -241,16 +255,44 @@ export default function AcademyScreen() {
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         {/* Header Card */}
         <View style={styles.headerCard}>
-          <IconSymbol
-            ios_icon_name="book.fill"
-            android_material_icon_name="menu-book"
-            size={64}
-            color={colors.primary}
-          />
-          <Text style={styles.headerTitle}>Academy</Text>
+          <Text style={styles.headerTitle}>Welcome New Creators</Text>
           <Text style={styles.headerSubtitle}>
             Master your creator journey with our comprehensive training
           </Text>
+        </View>
+
+        {/* Next LIVE Training Card */}
+        <View style={styles.liveTrainingCard}>
+          <View style={styles.liveTrainingHeader}>
+            <Text style={styles.liveTrainingTitle}>Next LIVE Training</Text>
+            <View style={styles.liveBadge}>
+              <Text style={styles.liveBadgeText}>LIVE</Text>
+            </View>
+          </View>
+          <Text style={styles.liveTrainingName}>Welcome New Creators</Text>
+          <View style={styles.liveTrainingDetails}>
+            <View style={styles.liveTrainingDetailItem}>
+              <IconSymbol
+                ios_icon_name="calendar"
+                android_material_icon_name="calendar-today"
+                size={16}
+                color={colors.textSecondary}
+              />
+              <Text style={styles.liveTrainingDetailText}>December 20, 2024</Text>
+            </View>
+            <View style={styles.liveTrainingDetailItem}>
+              <IconSymbol
+                ios_icon_name="clock"
+                android_material_icon_name="access-time"
+                size={16}
+                color={colors.textSecondary}
+              />
+              <Text style={styles.liveTrainingDetailText}>3:00 PM EST</Text>
+            </View>
+          </View>
+          <TouchableOpacity style={styles.joinTrainingButton}>
+            <Text style={styles.joinTrainingButtonText}>Join Training</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Progress Card */}
@@ -386,6 +428,43 @@ export default function AcademyScreen() {
           })}
         </View>
 
+        {/* Top 5 in the Network */}
+        <View style={styles.topCreatorsCard}>
+          <Text style={styles.topCreatorsTitle}>Top 5 in the Network</Text>
+          <Text style={styles.topCreatorsSubtitle}>Leading creators by diamonds earned</Text>
+          
+          {topCreators.map((creator, index) => (
+            <View key={index} style={styles.topCreatorRow}>
+              <View style={styles.topCreatorRank}>
+                <Text style={styles.topCreatorRankText}>{index + 1}</Text>
+              </View>
+              <View style={styles.topCreatorAvatar}>
+                {creator.avatar_url || creator.profile_picture_url ? (
+                  <Image
+                    source={{ uri: creator.avatar_url || creator.profile_picture_url }}
+                    style={styles.topCreatorAvatarImage}
+                  />
+                ) : (
+                  <View style={styles.topCreatorAvatarPlaceholder}>
+                    <IconSymbol
+                      ios_icon_name="person.fill"
+                      android_material_icon_name="person"
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                  </View>
+                )}
+              </View>
+              <View style={styles.topCreatorInfo}>
+                <Text style={styles.topCreatorHandle}>@{creator.creator_handle}</Text>
+                <Text style={styles.topCreatorDiamonds}>
+                  {creator.total_diamonds.toLocaleString()} diamonds
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+
         {/* Info Card */}
         <View style={styles.infoCard}>
           <IconSymbol
@@ -435,7 +514,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_700Bold',
     color: colors.text,
     textAlign: 'center',
-    marginTop: 16,
     marginBottom: 8,
   },
   headerSubtitle: {
@@ -443,6 +521,69 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_500Medium',
     color: colors.textSecondary,
     textAlign: 'center',
+  },
+  liveTrainingCard: {
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 24,
+    padding: 24,
+    marginBottom: 24,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  liveTrainingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  liveTrainingTitle: {
+    fontSize: 14,
+    fontFamily: 'Poppins_600SemiBold',
+    color: colors.textSecondary,
+    letterSpacing: 0.5,
+  },
+  liveBadge: {
+    backgroundColor: colors.error,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  liveBadgeText: {
+    fontSize: 11,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  liveTrainingName: {
+    fontSize: 22,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.text,
+    marginBottom: 16,
+  },
+  liveTrainingDetails: {
+    gap: 12,
+    marginBottom: 20,
+  },
+  liveTrainingDetailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  liveTrainingDetailText: {
+    fontSize: 15,
+    fontFamily: 'Poppins_500Medium',
+    color: colors.text,
+  },
+  joinTrainingButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+  },
+  joinTrainingButtonText: {
+    fontSize: 16,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
   },
   progressCard: {
     backgroundColor: colors.backgroundAlt,
@@ -555,6 +696,76 @@ const styles = StyleSheet.create({
     height: 24,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  topCreatorsCard: {
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 24,
+    padding: 24,
+    marginBottom: 20,
+  },
+  topCreatorsTitle: {
+    fontSize: 20,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  topCreatorsSubtitle: {
+    fontSize: 14,
+    fontFamily: 'Poppins_500Medium',
+    color: colors.textSecondary,
+    marginBottom: 20,
+  },
+  topCreatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  topCreatorRank: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  topCreatorRankText: {
+    fontSize: 16,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
+  },
+  topCreatorAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  topCreatorAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  topCreatorAvatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.grey,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  topCreatorInfo: {
+    flex: 1,
+  },
+  topCreatorHandle: {
+    fontSize: 16,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.text,
+    marginBottom: 2,
+  },
+  topCreatorDiamonds: {
+    fontSize: 13,
+    fontFamily: 'Poppins_500Medium',
+    color: colors.textSecondary,
   },
   infoCard: {
     flexDirection: 'row',
