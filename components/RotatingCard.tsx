@@ -35,7 +35,7 @@ export function RotatingCard({ type, isFaded = false, onPress, data }: RotatingC
     const requirementsPercentage = (requirementsMet / 3) * 100;
 
     return (
-      <View>
+      <View style={styles.cardWrapper}>
         <Animated.View style={[styles.card, cardStyle]}>
           {/* Header */}
           <View style={styles.bonusHeader}>
@@ -166,7 +166,7 @@ export function RotatingCard({ type, isFaded = false, onPress, data }: RotatingC
   const progressPercentage = ((data.diamondsEarned || 0) / (data.totalGoal || 200000)) * 100;
 
   return (
-    <View>
+    <View style={styles.cardWrapper}>
       <Animated.View style={[styles.card, cardStyle]}>
         {/* Header with Diamonds Number at Top-Left */}
         <View style={styles.diamondsHeader}>
@@ -228,12 +228,15 @@ export function RotatingCard({ type, isFaded = false, onPress, data }: RotatingC
 export default RotatingCard;
 
 const styles = StyleSheet.create({
+  cardWrapper: {
+    height: 380,
+  },
   card: {
     backgroundColor: '#6642EF',
     borderRadius: 24,
     padding: 24,
     width: '100%',
-    minHeight: 380,
+    height: 380,
   },
 
   // Bonus Card Styles

@@ -1005,11 +1005,12 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 2,
+    height: 380,
   },
 
   // ========== REST OF HOME CONTENT (SEPARATE SECTION) ==========
   restOfHomeContent: {
-    // This container holds all content that comes after the hero module
+    marginTop: 80,
   },
   diamondsBonusButton: {
     backgroundColor: '#6642EF',
