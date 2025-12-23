@@ -9,13 +9,14 @@ import {
   TextInput,
   ActivityIndicator,
 } from 'react-native';
-import { Stack, router } from 'expo-router';
+import { Stack } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
 import { useCreatorData } from '@/hooks/useCreatorData';
 import { IconSymbol } from '@/components/IconSymbol';
-import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
+import { AnimatedNumber } from '@/components/AnimatedNumber';
+import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold, Poppins_800ExtraBold } from '@expo-google-fonts/poppins';
 
-interface TierRequirement {
+interface BonusTier {
   name: string;
   minDays: number;
   minHours: number;
@@ -25,9 +26,9 @@ interface TierRequirement {
   maxPayout: number;
 }
 
-const TIER_REQUIREMENTS: TierRequirement[] = [
+const BONUS_TIERS: BonusTier[] = [
   {
-    name: 'Elite',
+    name: 'Lite',
     minDays: 22,
     minHours: 100,
     minDiamonds: 1600000,
@@ -55,43 +56,56 @@ const TIER_REQUIREMENTS: TierRequirement[] = [
   },
 ];
 
-interface TierCalculationResult {
-  qualifiedTier: string | null;
-  payoutRange: string;
-  reason: string;
-  activityMet: boolean;
-  diamondMet: boolean;
+function getTierFromDiamonds(diamonds: number, region: string): string {
+  // Region-based tier calculation
+  const isLatAm = region?.toLowerCase().includes('latin') || region?.toLowerCase().includes('latam');
+  
+  if (isLatAm) {
+    if (diamonds >= 300000) return 'Gold';
+    if (diamonds >= 100000) return 'Silver';
+  } else {
+    // USA & Canada
+    if (diamonds >= 500000) return 'Gold';
+    if (diamonds >= 200000) return 'Silver';
+  }
+  
+  return 'Rookie';
+}
+
+function parseHoursInput(input: string): number {
+  // Handle HH:MM format
+  if (input.includes(':')) {
+    const [hours, minutes] = input.split(':').map(Number);
+    return hours + (minutes / 60);
+  }
+  // Handle decimal or whole numbers
+  return parseFloat(input) || 0;
 }
 
 function calculateTier(
   daysStreamed: number,
   hoursStreamed: number,
-  creatorDiamonds: number
-): TierCalculationResult {
-  // Evaluate tiers from highest to lowest
-  for (const tier of TIER_REQUIREMENTS) {
-    const activityMet = daysStreamed >= tier.minDays && hoursStreamed >= tier.minHours;
-    const diamondMet = creatorDiamonds >= tier.minDiamonds && creatorDiamonds <= tier.maxDiamonds;
+  diamonds: number
+): { tier: BonusTier | null; checklist: { tier: string; days: boolean; hours: boolean; diamonds: boolean }[] } {
+  const checklist = BONUS_TIERS.map(tier => ({
+    tier: tier.name,
+    days: daysStreamed >= tier.minDays,
+    hours: hoursStreamed >= tier.minHours,
+    diamonds: diamonds >= tier.minDiamonds && diamonds <= tier.maxDiamonds,
+  }));
 
-    if (activityMet && diamondMet) {
-      return {
-        qualifiedTier: tier.name,
-        payoutRange: `$${tier.minPayout}–$${tier.maxPayout}`,
-        reason: 'All requirements met',
-        activityMet: true,
-        diamondMet: true,
-      };
+  // Evaluate from highest to lowest
+  for (const tier of BONUS_TIERS) {
+    const daysOk = daysStreamed >= tier.minDays;
+    const hoursOk = hoursStreamed >= tier.minHours;
+    const diamondsOk = diamonds >= tier.minDiamonds && diamonds <= tier.maxDiamonds;
+
+    if (daysOk && hoursOk && diamondsOk) {
+      return { tier, checklist };
     }
   }
 
-  // No tier qualified
-  return {
-    qualifiedTier: null,
-    payoutRange: '$0',
-    reason: 'Requirements not met',
-    activityMet: false,
-    diamondMet: false,
-  };
+  return { tier: null, checklist };
 }
 
 export default function BonusDetailsScreen() {
@@ -101,31 +115,24 @@ export default function BonusDetailsScreen() {
     Poppins_500Medium,
     Poppins_600SemiBold,
     Poppins_700Bold,
+    Poppins_800ExtraBold,
   });
 
   // Calculator inputs
   const [calcDays, setCalcDays] = useState('');
   const [calcHours, setCalcHours] = useState('');
   const [calcDiamonds, setCalcDiamonds] = useState('');
-  const [calcResult, setCalcResult] = useState<TierCalculationResult | null>(null);
+  const [calcResult, setCalcResult] = useState<{ tier: BonusTier | null; checklist: any[] } | null>(null);
 
-  // Current tier based on creator data
-  const [currentTier, setCurrentTier] = useState<TierCalculationResult | null>(null);
+  // Current month
+  const currentMonth = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-  useEffect(() => {
-    if (creator && stats) {
-      const result = calculateTier(
-        stats.liveDays,
-        stats.liveHours,
-        stats.totalDiamonds
-      );
-      setCurrentTier(result);
-    }
-  }, [creator, stats]);
+  // Current tier
+  const currentTier = creator ? getTierFromDiamonds(creator.total_diamonds || 0, creator.region || '') : 'Rookie';
 
   const handleCalculate = () => {
     const days = parseInt(calcDays) || 0;
-    const hours = parseInt(calcHours) || 0;
+    const hours = parseHoursInput(calcHours);
     const diamonds = parseInt(calcDiamonds) || 0;
 
     const result = calculateTier(days, hours, diamonds);
@@ -137,14 +144,16 @@ export default function BonusDetailsScreen() {
       <View style={styles.container}>
         <Stack.Screen
           options={{
-            title: 'Bonus Details',
+            title: 'My Diamonds & Bonus',
             headerShown: true,
             headerStyle: { backgroundColor: colors.background },
             headerTintColor: colors.text,
           }}
         />
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading bonus details...</Text>
+        <View style={styles.centerContent}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
       </View>
     );
   }
@@ -154,7 +163,7 @@ export default function BonusDetailsScreen() {
       <View style={styles.container}>
         <Stack.Screen
           options={{
-            title: 'Bonus Details',
+            title: 'My Diamonds & Bonus',
             headerShown: true,
             headerStyle: { backgroundColor: colors.background },
             headerTintColor: colors.text,
@@ -169,68 +178,126 @@ export default function BonusDetailsScreen() {
     <>
       <Stack.Screen
         options={{
-          title: 'Bonus Details',
+          title: 'My Diamonds & Bonus',
           headerShown: true,
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,
         }}
       />
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        {/* Bonus Summary Card */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <IconSymbol
-              ios_icon_name="dollarsign.circle.fill"
-              android_material_icon_name="attach-money"
-              size={32}
-              color={colors.primary}
-            />
-            <Text style={styles.cardTitle}>Bonus Summary</Text>
+        {/* Current Month Label */}
+        <Text style={styles.monthLabel}>{currentMonth}</Text>
+
+        {/* Hero Section - Cohesive Card */}
+        <View style={styles.heroCard}>
+          <View style={styles.heroHeader}>
+            <View style={styles.tierBadge}>
+              <IconSymbol
+                ios_icon_name="checkmark.seal.fill"
+                android_material_icon_name="verified"
+                size={24}
+                color={currentTier === 'Gold' ? '#FFD700' : currentTier === 'Silver' ? '#C0C0C0' : '#10B981'}
+              />
+              <Text style={styles.tierText}>{currentTier}</Text>
+            </View>
           </View>
 
-          {currentTier && (
-            <>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Current Tier</Text>
-                <Text style={[styles.summaryValue, currentTier.qualifiedTier ? styles.summaryValueSuccess : styles.summaryValueError]}>
-                  {currentTier.qualifiedTier || 'None'}
+          <View style={styles.heroContent}>
+            <Text style={styles.heroLabel}>Monthly Diamonds</Text>
+            <AnimatedNumber
+              value={creator.diamonds_monthly || 0}
+              style={styles.heroDiamonds}
+            />
+          </View>
+        </View>
+
+        {/* Your Bonus for This Month */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Your bonus for this month</Text>
+          
+          <View style={styles.bonusItem}>
+            <View style={styles.bonusItemLeft}>
+              <IconSymbol
+                ios_icon_name="dollarsign.circle.fill"
+                android_material_icon_name="attach-money"
+                size={24}
+                color={colors.primary}
+              />
+              <Text style={styles.bonusItemText}>Base Bonus</Text>
+            </View>
+            <Text style={styles.bonusItemValue}>$100</Text>
+          </View>
+
+          <View style={styles.bonusItem}>
+            <View style={styles.bonusItemLeft}>
+              <IconSymbol
+                ios_icon_name="star.fill"
+                android_material_icon_name="star"
+                size={24}
+                color={colors.primary}
+              />
+              <Text style={styles.bonusItemText}>Performance Bonus</Text>
+            </View>
+            <Text style={styles.bonusItemValue}>$50</Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.bonusTotal}>
+            <Text style={styles.bonusTotalLabel}>Total Bonus</Text>
+            <Text style={styles.bonusTotalValue}>$150</Text>
+          </View>
+        </View>
+
+        {/* How Bonuses Work - Table */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>How Bonuses Work</Text>
+          <Text style={styles.cardSubtitle}>Monthly bonus tiers and requirements</Text>
+
+          {BONUS_TIERS.map((tier, index) => (
+            <View key={tier.name} style={styles.tierTableCard}>
+              <View style={styles.tierTableHeader}>
+                <Text style={styles.tierTableName}>{tier.name}</Text>
+                <Text style={styles.tierTablePayout}>
+                  ${tier.minPayout}–${tier.maxPayout}
                 </Text>
               </View>
 
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Payout Range</Text>
-                <Text style={styles.summaryValue}>{currentTier.payoutRange}</Text>
-              </View>
-
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Status</Text>
-                <Text style={styles.summaryValue}>{currentTier.reason}</Text>
-              </View>
-
-              <View style={styles.divider} />
-
-              <View style={styles.requirementStatus}>
-                <View style={styles.statusRow}>
+              <View style={styles.tierTableRequirements}>
+                <View style={styles.tierTableRow}>
                   <IconSymbol
-                    ios_icon_name={currentTier.activityMet ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
-                    android_material_icon_name={currentTier.activityMet ? 'check-circle' : 'cancel'}
-                    size={20}
-                    color={currentTier.activityMet ? colors.success : colors.error}
+                    ios_icon_name="calendar"
+                    android_material_icon_name="calendar-today"
+                    size={16}
+                    color={colors.textSecondary}
                   />
-                  <Text style={styles.statusText}>Activity Gate: {stats.liveDays} days, {stats.liveHours} hours</Text>
+                  <Text style={styles.tierTableText}>≥{tier.minDays} days</Text>
                 </View>
-                <View style={styles.statusRow}>
+
+                <View style={styles.tierTableRow}>
                   <IconSymbol
-                    ios_icon_name={currentTier.diamondMet ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
-                    android_material_icon_name={currentTier.diamondMet ? 'check-circle' : 'cancel'}
-                    size={20}
-                    color={currentTier.diamondMet ? colors.success : colors.error}
+                    ios_icon_name="clock"
+                    android_material_icon_name="access-time"
+                    size={16}
+                    color={colors.textSecondary}
                   />
-                  <Text style={styles.statusText}>Diamond Gate: {stats.totalDiamonds.toLocaleString()} diamonds</Text>
+                  <Text style={styles.tierTableText}>≥{tier.minHours} hours</Text>
+                </View>
+
+                <View style={styles.tierTableRow}>
+                  <IconSymbol
+                    ios_icon_name="sparkles"
+                    android_material_icon_name="auto-awesome"
+                    size={16}
+                    color={colors.textSecondary}
+                  />
+                  <Text style={styles.tierTableText}>
+                    {(tier.minDiamonds / 1000).toFixed(0)}K ≤ diamonds {'<'} {(tier.maxDiamonds / 1000000).toFixed(1)}M
+                  </Text>
                 </View>
               </View>
-            </>
-          )}
+            </View>
+          ))}
         </View>
 
         {/* Bonus Calculator */}
@@ -256,7 +323,7 @@ export default function BonusDetailsScreen() {
               value={calcDays}
               onChangeText={setCalcDays}
               keyboardType="numeric"
-              placeholder="e.g., 22"
+              placeholder="e.g., 21, 23, 24"
               placeholderTextColor={colors.textTertiary}
             />
           </View>
@@ -267,14 +334,14 @@ export default function BonusDetailsScreen() {
               style={styles.input}
               value={calcHours}
               onChangeText={setCalcHours}
-              keyboardType="numeric"
-              placeholder="e.g., 100"
+              placeholder="e.g., 100, 65.5, or 65:30"
               placeholderTextColor={colors.textTertiary}
             />
+            <Text style={styles.inputHint}>Accepts HH:MM, decimals, or whole numbers</Text>
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Creator Diamonds</Text>
+            <Text style={styles.inputLabel}>Diamonds</Text>
             <TextInput
               style={styles.input}
               value={calcDiamonds}
@@ -292,102 +359,67 @@ export default function BonusDetailsScreen() {
           {calcResult && (
             <View style={styles.calcResultContainer}>
               <View style={styles.calcResultHeader}>
-                <Text style={styles.calcResultTitle}>Result</Text>
-              </View>
-              <View style={styles.calcResultRow}>
-                <Text style={styles.calcResultLabel}>Qualified Tier:</Text>
-                <Text style={[styles.calcResultValue, calcResult.qualifiedTier ? styles.calcResultValueSuccess : styles.calcResultValueError]}>
-                  {calcResult.qualifiedTier || 'None'}
+                <Text style={styles.calcResultTitle}>
+                  {calcResult.tier ? `Qualified: ${calcResult.tier.name}` : 'No Tier Qualified'}
                 </Text>
+                {calcResult.tier && (
+                  <Text style={styles.calcResultPayout}>
+                    ${calcResult.tier.minPayout}–${calcResult.tier.maxPayout}
+                  </Text>
+                )}
               </View>
-              <View style={styles.calcResultRow}>
-                <Text style={styles.calcResultLabel}>Payout Range:</Text>
-                <Text style={styles.calcResultValue}>{calcResult.payoutRange}</Text>
-              </View>
-              <View style={styles.calcResultRow}>
-                <Text style={styles.calcResultLabel}>Reason:</Text>
-                <Text style={styles.calcResultValue}>{calcResult.reason}</Text>
-              </View>
+
+              <Text style={styles.checklistTitle}>Requirements Checklist</Text>
+              {calcResult.checklist.map((item, index) => (
+                <View key={index} style={styles.checklistSection}>
+                  <Text style={styles.checklistTierName}>{item.tier}</Text>
+                  <View style={styles.checklistItems}>
+                    <View style={styles.checklistItem}>
+                      <IconSymbol
+                        ios_icon_name={item.days ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
+                        android_material_icon_name={item.days ? 'check-circle' : 'cancel'}
+                        size={20}
+                        color={item.days ? colors.success : colors.error}
+                      />
+                      <Text style={styles.checklistItemText}>Days</Text>
+                    </View>
+                    <View style={styles.checklistItem}>
+                      <IconSymbol
+                        ios_icon_name={item.hours ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
+                        android_material_icon_name={item.hours ? 'check-circle' : 'cancel'}
+                        size={20}
+                        color={item.hours ? colors.success : colors.error}
+                      />
+                      <Text style={styles.checklistItemText}>Hours</Text>
+                    </View>
+                    <View style={styles.checklistItem}>
+                      <IconSymbol
+                        ios_icon_name={item.diamonds ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
+                        android_material_icon_name={item.diamonds ? 'check-circle' : 'cancel'}
+                        size={20}
+                        color={item.diamonds ? colors.success : colors.error}
+                      />
+                      <Text style={styles.checklistItemText}>Diamonds</Text>
+                    </View>
+                  </View>
+                </View>
+              ))}
+
+              {!calcResult.tier && (
+                <View style={styles.noTierMessage}>
+                  <IconSymbol
+                    ios_icon_name="info.circle.fill"
+                    android_material_icon_name="info"
+                    size={24}
+                    color={colors.primary}
+                  />
+                  <Text style={styles.noTierMessageText}>
+                    You need to meet all requirements (days, hours, and diamonds) to qualify for a tier.
+                  </Text>
+                </View>
+              )}
             </View>
           )}
-        </View>
-
-        {/* Bonus Rules Table */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <IconSymbol
-              ios_icon_name="list.bullet.rectangle"
-              android_material_icon_name="list"
-              size={32}
-              color={colors.primary}
-            />
-            <Text style={styles.cardTitle}>Bonus Rules</Text>
-          </View>
-
-          <Text style={styles.rulesSubtitle}>
-            Both activity and diamond gates must be passed to qualify for a tier
-          </Text>
-
-          {TIER_REQUIREMENTS.map((tier, index) => (
-            <View key={index} style={styles.tierCard}>
-              <View style={styles.tierHeader}>
-                <Text style={styles.tierName}>{tier.name}</Text>
-                <Text style={styles.tierPayout}>
-                  ${tier.minPayout}–${tier.maxPayout}
-                </Text>
-              </View>
-
-              <View style={styles.tierRequirements}>
-                <View style={styles.tierRequirementRow}>
-                  <IconSymbol
-                    ios_icon_name="calendar"
-                    android_material_icon_name="calendar-today"
-                    size={16}
-                    color={colors.textSecondary}
-                  />
-                  <Text style={styles.tierRequirementText}>
-                    Days Streamed: ≥ {tier.minDays}
-                  </Text>
-                </View>
-
-                <View style={styles.tierRequirementRow}>
-                  <IconSymbol
-                    ios_icon_name="clock"
-                    android_material_icon_name="access-time"
-                    size={16}
-                    color={colors.textSecondary}
-                  />
-                  <Text style={styles.tierRequirementText}>
-                    Hours Streamed: ≥ {tier.minHours}
-                  </Text>
-                </View>
-
-                <View style={styles.tierRequirementRow}>
-                  <IconSymbol
-                    ios_icon_name="diamond"
-                    android_material_icon_name="diamond"
-                    size={16}
-                    color={colors.textSecondary}
-                  />
-                  <Text style={styles.tierRequirementText}>
-                    Diamonds: {tier.minDiamonds.toLocaleString()} – {tier.maxDiamonds.toLocaleString()}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          ))}
-
-          <View style={styles.noteContainer}>
-            <IconSymbol
-              ios_icon_name="info.circle.fill"
-              android_material_icon_name="info"
-              size={20}
-              color={colors.primary}
-            />
-            <Text style={styles.noteText}>
-              Diamonds alone do NOT auto-promote. Both activity and diamond requirements must be met.
-            </Text>
-          </View>
         </View>
       </ScrollView>
     </>
@@ -398,6 +430,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  centerContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
     padding: 20,
@@ -414,6 +451,54 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_500Medium',
     color: colors.error,
     textAlign: 'center',
+    padding: 20,
+  },
+  monthLabel: {
+    fontSize: 16,
+    fontFamily: 'Poppins_600SemiBold',
+    color: colors.textSecondary,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  heroCard: {
+    backgroundColor: '#6642EF',
+    borderRadius: 24,
+    padding: 32,
+    marginBottom: 24,
+  },
+  heroHeader: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 24,
+  },
+  tierBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 8,
+  },
+  tierText: {
+    fontSize: 16,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
+  },
+  heroContent: {
+    alignItems: 'center',
+  },
+  heroLabel: {
+    fontSize: 16,
+    fontFamily: 'Poppins_500Medium',
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginBottom: 12,
+  },
+  heroDiamonds: {
+    fontSize: 64,
+    fontFamily: 'Poppins_800ExtraBold',
+    color: '#FFFFFF',
+    letterSpacing: -2,
   },
   card: {
     backgroundColor: colors.backgroundAlt,
@@ -424,53 +509,97 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
     gap: 12,
   },
   cardTitle: {
     fontSize: 20,
     fontFamily: 'Poppins_700Bold',
     color: colors.text,
+    marginBottom: 8,
   },
-  summaryRow: {
+  cardSubtitle: {
+    fontSize: 14,
+    fontFamily: 'Poppins_400Regular',
+    color: colors.textSecondary,
+    marginBottom: 20,
+  },
+  bonusItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  bonusItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  bonusItemText: {
+    fontSize: 16,
+    fontFamily: 'Poppins_500Medium',
+    color: colors.text,
+  },
+  bonusItemValue: {
+    fontSize: 18,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.text,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: 8,
+  },
+  bonusTotal: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 16,
+  },
+  bonusTotalLabel: {
+    fontSize: 18,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.text,
+  },
+  bonusTotalValue: {
+    fontSize: 24,
+    fontFamily: 'Poppins_800ExtraBold',
+    color: colors.primary,
+  },
+  tierTableCard: {
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+  },
+  tierTableHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
   },
-  summaryLabel: {
-    fontSize: 15,
-    fontFamily: 'Poppins_500Medium',
-    color: colors.textSecondary,
-  },
-  summaryValue: {
-    fontSize: 16,
+  tierTableName: {
+    fontSize: 18,
     fontFamily: 'Poppins_700Bold',
     color: colors.text,
   },
-  summaryValueSuccess: {
-    color: colors.success,
+  tierTablePayout: {
+    fontSize: 16,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.primary,
   },
-  summaryValueError: {
-    color: colors.error,
+  tierTableRequirements: {
+    gap: 8,
   },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: 16,
-  },
-  requirementStatus: {
-    gap: 12,
-  },
-  statusRow: {
+  tierTableRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  statusText: {
+  tierTableText: {
     fontSize: 14,
     fontFamily: 'Poppins_500Medium',
-    color: colors.text,
+    color: colors.textSecondary,
   },
   calculatorSubtitle: {
     fontSize: 14,
@@ -488,12 +617,20 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   input: {
-    backgroundColor: colors.grey,
+    backgroundColor: colors.background,
     borderRadius: 12,
     padding: 14,
     fontSize: 16,
     fontFamily: 'Poppins_500Medium',
     color: colors.text,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  inputHint: {
+    fontSize: 12,
+    fontFamily: 'Poppins_400Regular',
+    color: colors.textSecondary,
+    marginTop: 6,
   },
   calculateButton: {
     backgroundColor: colors.primary,
@@ -509,93 +646,65 @@ const styles = StyleSheet.create({
   },
   calcResultContainer: {
     marginTop: 20,
-    backgroundColor: colors.grey,
+    backgroundColor: colors.background,
     borderRadius: 16,
     padding: 16,
   },
   calcResultHeader: {
-    marginBottom: 12,
+    marginBottom: 16,
   },
   calcResultTitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins_700Bold',
-    color: colors.text,
-  },
-  calcResultRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  calcResultLabel: {
-    fontSize: 14,
-    fontFamily: 'Poppins_500Medium',
-    color: colors.textSecondary,
-  },
-  calcResultValue: {
-    fontSize: 15,
-    fontFamily: 'Poppins_700Bold',
-    color: colors.text,
-  },
-  calcResultValueSuccess: {
-    color: colors.success,
-  },
-  calcResultValueError: {
-    color: colors.error,
-  },
-  rulesSubtitle: {
-    fontSize: 14,
-    fontFamily: 'Poppins_400Regular',
-    color: colors.textSecondary,
-    marginBottom: 20,
-  },
-  tierCard: {
-    backgroundColor: colors.grey,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-  },
-  tierHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  tierName: {
     fontSize: 18,
     fontFamily: 'Poppins_700Bold',
     color: colors.text,
+    marginBottom: 4,
   },
-  tierPayout: {
+  calcResultPayout: {
     fontSize: 16,
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Poppins_600SemiBold',
     color: colors.primary,
   },
-  tierRequirements: {
-    gap: 8,
+  checklistTitle: {
+    fontSize: 16,
+    fontFamily: 'Poppins_600SemiBold',
+    color: colors.text,
+    marginBottom: 12,
   },
-  tierRequirementRow: {
+  checklistSection: {
+    marginBottom: 12,
+  },
+  checklistTierName: {
+    fontSize: 14,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  checklistItems: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  checklistItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
-  tierRequirementText: {
-    fontSize: 14,
+  checklistItemText: {
+    fontSize: 13,
     fontFamily: 'Poppins_500Medium',
     color: colors.textSecondary,
   },
-  noteContainer: {
+  noTierMessage: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
     marginTop: 16,
     padding: 16,
-    backgroundColor: colors.grey,
+    backgroundColor: colors.backgroundAlt,
     borderRadius: 12,
   },
-  noteText: {
+  noTierMessageText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: 'Poppins_500Medium',
     color: colors.textSecondary,
     lineHeight: 20,

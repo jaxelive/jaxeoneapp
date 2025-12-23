@@ -34,6 +34,34 @@ interface Contest {
   rules_url: string | null;
 }
 
+// Placeholder financial/progress activities
+const PLACEHOLDER_ACTIVITIES = [
+  {
+    id: '1',
+    title: 'You reached a new milestone',
+    description: 'Congratulations! You\'ve earned 50,000 diamonds this month.',
+    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+    icon: 'star.fill' as const,
+    iconAndroid: 'star' as const,
+  },
+  {
+    id: '2',
+    title: 'You unlocked a bonus tier',
+    description: 'Great work! You\'ve qualified for the Ascensus bonus tier.',
+    timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
+    icon: 'trophy.fill' as const,
+    iconAndroid: 'emoji-events' as const,
+  },
+  {
+    id: '3',
+    title: 'Bonus payment processed',
+    description: 'Your monthly bonus of $100 has been processed.',
+    timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
+    icon: 'dollarsign.circle.fill' as const,
+    iconAndroid: 'attach-money' as const,
+  },
+];
+
 export default function NotificationsScreen() {
   const { creator } = useCreatorData();
   const [fontsLoaded] = useFonts({
@@ -92,6 +120,20 @@ export default function NotificationsScreen() {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
+  const formatRelativeTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffHours < 1) return 'Just now';
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return formatDate(dateString);
+  };
+
   if (loading || !fontsLoaded) {
     return (
       <View style={styles.container}>
@@ -122,7 +164,7 @@ export default function NotificationsScreen() {
         }}
       />
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        {/* News & Contests Cast - Expandable Section */}
+        {/* News & Contest - Expandable Section */}
         <TouchableOpacity
           style={styles.expandableHeader}
           onPress={() => setNewsExpanded(!newsExpanded)}
@@ -135,7 +177,7 @@ export default function NotificationsScreen() {
               size={24}
               color={colors.primary}
             />
-            <Text style={styles.expandableHeaderTitle}>News & Contests Cast</Text>
+            <Text style={styles.expandableHeaderTitle}>News & Contest</Text>
           </View>
           <IconSymbol
             ios_icon_name={newsExpanded ? 'chevron.up' : 'chevron.down'}
@@ -178,9 +220,11 @@ export default function NotificationsScreen() {
                       />
                       <View style={styles.contestInfo}>
                         <Text style={styles.contestTitle}>{contest.title}</Text>
-                        <Text style={styles.contestPrize}>
-                          Prize: ${(contest.prize_cents / 100).toFixed(2)}
-                        </Text>
+                        {contest.prize_cents > 0 && (
+                          <Text style={styles.contestPrize}>
+                            Prize: ${(contest.prize_cents / 100).toFixed(2)}
+                          </Text>
+                        )}
                       </View>
                     </View>
                     <Text style={styles.contestDescription}>{contest.description}</Text>
@@ -211,18 +255,26 @@ export default function NotificationsScreen() {
           </View>
         )}
 
-        {/* Other Notifications Section */}
+        {/* Recent Activity Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
-          <View style={styles.emptyState}>
-            <IconSymbol
-              ios_icon_name="bell"
-              android_material_icon_name="notifications"
-              size={48}
-              color={colors.textTertiary}
-            />
-            <Text style={styles.emptyStateText}>No recent activity</Text>
-          </View>
+          {PLACEHOLDER_ACTIVITIES.map((activity) => (
+            <View key={activity.id} style={styles.activityCard}>
+              <View style={styles.activityIconContainer}>
+                <IconSymbol
+                  ios_icon_name={activity.icon}
+                  android_material_icon_name={activity.iconAndroid}
+                  size={24}
+                  color={colors.primary}
+                />
+              </View>
+              <View style={styles.activityContent}>
+                <Text style={styles.activityTitle}>{activity.title}</Text>
+                <Text style={styles.activityDescription}>{activity.description}</Text>
+                <Text style={styles.activityTime}>{formatRelativeTime(activity.timestamp)}</Text>
+              </View>
+            </View>
+          ))}
         </View>
       </ScrollView>
     </>
@@ -350,6 +402,43 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   contestDate: {
+    fontSize: 12,
+    fontFamily: 'Poppins_500Medium',
+    color: colors.textTertiary,
+  },
+  activityCard: {
+    flexDirection: 'row',
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    gap: 16,
+  },
+  activityIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(102, 66, 239, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityTitle: {
+    fontSize: 16,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  activityDescription: {
+    fontSize: 14,
+    fontFamily: 'Poppins_400Regular',
+    color: colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  activityTime: {
     fontSize: 12,
     fontFamily: 'Poppins_500Medium',
     color: colors.textTertiary,

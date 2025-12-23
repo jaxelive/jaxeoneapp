@@ -11,12 +11,13 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/app/integrations/supabase/client';
 import { useCreatorData } from '@/hooks/useCreatorData';
+import { IconSymbol } from '@/components/IconSymbol';
 
 export default function ProfileScreen() {
   const { creator, loading: creatorLoading, refetch } = useCreatorData();
@@ -28,6 +29,7 @@ export default function ProfileScreen() {
   const [language, setLanguage] = useState('');
   const [paypalEmail, setPaypalEmail] = useState('');
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
+  const [profileFeature, setProfileFeature] = useState<string | null>(null);
 
   useEffect(() => {
     if (creator) {
@@ -35,6 +37,7 @@ export default function ProfileScreen() {
       setLanguage(creator.language || 'English');
       setPaypalEmail(creator.paypal_email || '');
       setProfilePicture(creator.profile_picture_url || creator.avatar_url || null);
+      setProfileFeature((creator as any).profile_feature_url || null);
     }
   }, [creator]);
 
@@ -58,6 +61,26 @@ export default function ProfileScreen() {
     }
   };
 
+  const pickProfileFeature = async () => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (permissionResult.granted === false) {
+      Alert.alert('Permission Required', 'Permission to access camera roll is required!');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setProfileFeature(result.assets[0].uri);
+    }
+  };
+
   const handleSave = async () => {
     if (!creator) return;
 
@@ -72,6 +95,11 @@ export default function ProfileScreen() {
       // Only update profile picture if it changed
       if (profilePicture && profilePicture !== creator.profile_picture_url) {
         updates.profile_picture_url = profilePicture;
+      }
+
+      // Only update profile feature if it changed
+      if (profileFeature !== (creator as any).profile_feature_url) {
+        updates.profile_feature_url = profileFeature;
       }
 
       const { error } = await supabase
@@ -139,6 +167,7 @@ export default function ProfileScreen() {
                   setLanguage(creator.language || 'English');
                   setPaypalEmail(creator.paypal_email || '');
                   setProfilePicture(creator.profile_picture_url || creator.avatar_url || null);
+                  setProfileFeature((creator as any).profile_feature_url || null);
                   setIsEditing(false);
                 } else {
                   setIsEditing(true);
@@ -185,7 +214,51 @@ export default function ProfileScreen() {
             {creator.first_name} {creator.last_name}
           </Text>
           <Text style={styles.handle}>@{creator.creator_handle}</Text>
+          
+          {/* Verify Icon - Clickable */}
+          <TouchableOpacity 
+            style={styles.verifyIconContainer}
+            onPress={() => router.push('/tier-explanation' as any)}
+          >
+            <IconSymbol
+              ios_icon_name="checkmark.seal.fill"
+              android_material_icon_name="verified"
+              size={32}
+              color="#FFD700"
+            />
+          </TouchableOpacity>
         </LinearGradient>
+
+        {/* Profile Feature Section */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Profile Feature</Text>
+          <TouchableOpacity
+            onPress={isEditing ? pickProfileFeature : undefined}
+            disabled={!isEditing}
+            style={styles.profileFeatureContainer}
+          >
+            {profileFeature ? (
+              <Image source={{ uri: profileFeature }} style={styles.profileFeatureImage} />
+            ) : (
+              <View style={styles.profileFeaturePlaceholder}>
+                <IconSymbol
+                  ios_icon_name="photo"
+                  android_material_icon_name="image"
+                  size={48}
+                  color={colors.textTertiary}
+                />
+                <Text style={styles.profileFeaturePlaceholderText}>
+                  {isEditing ? 'Tap to add profile feature' : 'No profile feature'}
+                </Text>
+              </View>
+            )}
+            {isEditing && profileFeature && (
+              <View style={styles.editBadgeFeature}>
+                <Text style={styles.editBadgeText}>✏️</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
 
         {/* Editable Fields */}
         <View style={styles.card}>
@@ -386,6 +459,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.textSecondary,
   },
+  verifyIconContainer: {
+    marginTop: 12,
+  },
   card: {
     backgroundColor: colors.backgroundAlt,
     borderRadius: 24,
@@ -399,6 +475,42 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
     marginBottom: 16,
+  },
+  profileFeatureContainer: {
+    position: 'relative',
+    width: '100%',
+    height: 200,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: colors.background,
+  },
+  profileFeatureImage: {
+    width: '100%',
+    height: '100%',
+  },
+  profileFeaturePlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+  },
+  profileFeaturePlaceholderText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.textSecondary,
+    marginTop: 8,
+  },
+  editBadgeFeature: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   fieldContainer: {
     marginBottom: 16,
