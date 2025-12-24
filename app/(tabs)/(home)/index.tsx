@@ -678,7 +678,7 @@ export default function HomeScreen() {
                       </View>
                     ))}
 
-                    {/* YOUR RANK - PROMINENT SECTION */}
+                    {/* YOUR RANK - PROMINENT SECTION - WITHOUT TOTAL CREATORS */}
                     {userRank && (
                       <View style={styles.yourRankContainer}>
                         <View style={styles.yourRankHeader}>
@@ -693,7 +693,6 @@ export default function HomeScreen() {
                         <View style={styles.yourRankContent}>
                           <View style={styles.yourRankNumberContainer}>
                             <Text style={styles.yourRankNumber}>#{userRank.rank}</Text>
-                            <Text style={styles.yourRankTotal}>of {userRank.total_creators}</Text>
                           </View>
                           <View style={styles.yourRankDivider} />
                           <View style={styles.yourRankStats}>
@@ -1371,7 +1370,7 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
 
-  // YOUR RANK - PROMINENT SECTION
+  // YOUR RANK - PROMINENT SECTION - WITHOUT TOTAL CREATORS
   yourRankContainer: {
     marginTop: 24,
     padding: 20,
@@ -1405,12 +1404,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_800ExtraBold',
     color: '#6642EF',
     lineHeight: 52,
-  },
-  yourRankTotal: {
-    fontSize: 14,
-    fontFamily: 'Poppins_500Medium',
-    color: '#A0A0A0',
-    marginTop: 4,
   },
   yourRankDivider: {
     width: 2,
