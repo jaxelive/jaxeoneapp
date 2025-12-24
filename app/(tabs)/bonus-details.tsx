@@ -29,7 +29,7 @@ interface BonusTier {
 
 const BONUS_TIERS: BonusTier[] = [
   {
-    name: 'Lite',
+    name: 'Elite',
     minDays: 22,
     minHours: 100,
     minDiamonds: 1600000,
@@ -160,6 +160,11 @@ export default function BonusDetailsScreen() {
     ? Math.min(100, ((liveDays / nextBonusTier.minDays) + (liveHours / nextBonusTier.minHours) + ((creator?.diamonds_monthly || 0) / nextBonusTier.minDiamonds)) / 3 * 100)
     : 100;
 
+  // Calculate diamonds remaining for next bonus tier
+  const diamondsRemaining = nextBonusTier 
+    ? Math.max(0, nextBonusTier.minDiamonds - (creator?.diamonds_monthly || 0))
+    : 0;
+
   const handleCalculate = () => {
     const days = parseInt(calcDays) || 0;
     const hours = parseHoursInput(calcHours);
@@ -218,7 +223,7 @@ export default function BonusDetailsScreen() {
         {/* Current Month Label */}
         <Text style={styles.monthLabel}>{currentMonth}</Text>
 
-        {/* Hero Section - Cohesive Card */}
+        {/* Hero Section - Cohesive Card with LIVE Hours and LIVE Days */}
         <View style={styles.heroCard}>
           <View style={styles.heroHeader}>
             <View style={styles.tierBadge}>
@@ -238,6 +243,39 @@ export default function BonusDetailsScreen() {
               value={creator.diamonds_monthly || 0}
               style={styles.heroDiamonds}
             />
+          </View>
+
+          {/* LIVE Hours and LIVE Days */}
+          <View style={styles.liveStatsContainer}>
+            <View style={styles.liveStatItem}>
+              <IconSymbol
+                ios_icon_name="clock.fill"
+                android_material_icon_name="access-time"
+                size={20}
+                color="rgba(255, 255, 255, 0.9)"
+              />
+              <Text style={styles.liveStatLabel}>LIVE Hours</Text>
+              <AnimatedNumber
+                value={liveHours}
+                style={styles.liveStatValue}
+                formatNumber={false}
+              />
+            </View>
+            <View style={styles.liveStatDivider} />
+            <View style={styles.liveStatItem}>
+              <IconSymbol
+                ios_icon_name="calendar.badge.clock"
+                android_material_icon_name="calendar-today"
+                size={20}
+                color="rgba(255, 255, 255, 0.9)"
+              />
+              <Text style={styles.liveStatLabel}>LIVE Days</Text>
+              <AnimatedNumber
+                value={liveDays}
+                style={styles.liveStatValue}
+                formatNumber={false}
+              />
+            </View>
           </View>
         </View>
 
@@ -273,6 +311,24 @@ export default function BonusDetailsScreen() {
                 <Text style={styles.nextBonusTierName}>{nextBonusTier.name}</Text>
                 <Text style={styles.nextBonusPayout}>
                   ${nextBonusTier.minPayout}–${nextBonusTier.maxPayout}
+                </Text>
+              </View>
+
+              {/* Diamonds Remaining Message */}
+              <View style={styles.diamondsRemainingContainer}>
+                <IconSymbol
+                  ios_icon_name="sparkles"
+                  android_material_icon_name="auto-awesome"
+                  size={20}
+                  color={colors.primary}
+                />
+                <Text style={styles.diamondsRemainingText}>
+                  <AnimatedNumber 
+                    value={diamondsRemaining} 
+                    style={styles.diamondsRemainingNumber}
+                    formatNumber={true}
+                  />
+                  <Text style={styles.diamondsRemainingText}> diamonds remaining to reach {nextBonusTier.name}</Text>
                 </Text>
               </View>
 
@@ -621,6 +677,7 @@ const styles = StyleSheet.create({
   },
   heroContent: {
     alignItems: 'center',
+    marginBottom: 24,
   },
   heroLabel: {
     fontSize: 16,
@@ -633,6 +690,40 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_800ExtraBold',
     color: '#FFFFFF',
     letterSpacing: -2,
+  },
+  
+  // LIVE Stats Container
+  liveStatsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+  liveStatItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  liveStatLabel: {
+    fontSize: 12,
+    fontFamily: 'Poppins_500Medium',
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  liveStatValue: {
+    fontSize: 28,
+    fontFamily: 'Poppins_800ExtraBold',
+    color: '#FFFFFF',
+    letterSpacing: -1,
+  },
+  liveStatDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    marginHorizontal: 16,
   },
   
   // BONUS CARD - GREEN BACKGROUND
@@ -725,6 +816,30 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_700Bold',
     color: '#10B981',
   },
+  
+  // Diamonds Remaining Container
+  diamondsRemainingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    gap: 10,
+  },
+  diamondsRemainingText: {
+    fontSize: 15,
+    fontFamily: 'Poppins_600SemiBold',
+    color: colors.text,
+    flex: 1,
+  },
+  diamondsRemainingNumber: {
+    fontSize: 15,
+    fontFamily: 'Poppins_800ExtraBold',
+    color: colors.primary,
+  },
+  
   requirementsTitle: {
     fontSize: 16,
     fontFamily: 'Poppins_700Bold',
