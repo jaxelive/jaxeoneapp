@@ -97,6 +97,11 @@ export default function HomeScreen() {
   const [chatDrawerVisible, setChatDrawerVisible] = useState(false);
   const [topCreators, setTopCreators] = useState<TopCreator[]>([]);
   const [userRank, setUserRank] = useState<UserRank | null>(null);
+  const [showAcademy, setShowAcademy] = useState(true);
+  const [showChallenge, setShowChallenge] = useState(true);
+  const [academyCompletedAt, setAcademyCompletedAt] = useState<string | null>(null);
+  const [challengeCompletedAt, setChallengeCompletedAt] = useState<string | null>(null);
+  const [totalCourseVideos, setTotalCourseVideos] = useState(0);
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -196,6 +201,33 @@ export default function HomeScreen() {
         todayStatus,
         totalDays: 21,
       });
+
+      // Check if challenge is completed and when
+      const { data: challengeData, error: challengeError } = await supabase
+        .from('user_challenge_progress')
+        .select('completed_at')
+        .eq('user_id', creator.id)
+        .eq('status', 'completed')
+        .single();
+
+      if (challengeError && challengeError.code !== 'PGRST116') {
+        console.error('[HomeScreen] Error fetching challenge completion:', challengeError);
+      }
+
+      if (challengeData?.completed_at) {
+        setChallengeCompletedAt(challengeData.completed_at);
+        
+        // Check if 5 days have passed since completion
+        const completedDate = new Date(challengeData.completed_at);
+        const fiveDaysLater = new Date(completedDate);
+        fiveDaysLater.setDate(fiveDaysLater.getDate() + 5);
+        const now = new Date();
+        
+        if (now > fiveDaysLater) {
+          setShowChallenge(false);
+          console.log('[HomeScreen] Challenge hidden - 5 days passed since completion');
+        }
+      }
     } catch (error: any) {
       console.error('[HomeScreen] Unexpected error fetching challenge data:', error);
     }
@@ -205,6 +237,19 @@ export default function HomeScreen() {
     if (!creator) return;
 
     try {
+      // Get total number of videos in the course
+      const { data: videosData, error: videosError } = await supabase
+        .from('course_videos')
+        .select('id');
+
+      if (videosError && videosError.code !== 'PGRST116') {
+        console.error('[HomeScreen] Error fetching course videos:', videosError);
+      }
+
+      const totalVideos = videosData?.length || 5;
+      setTotalCourseVideos(totalVideos);
+
+      // Fetch completed videos
       const { data: educationData, error: educationError } = await supabase
         .from('user_video_progress')
         .select('*')
@@ -217,8 +262,50 @@ export default function HomeScreen() {
       }
 
       const completedVideos = educationData?.length || 0;
-      console.log('[HomeScreen] Education progress:', completedVideos, '/5');
+      console.log('[HomeScreen] Education progress:', completedVideos, '/', totalVideos);
       setEducationProgress(completedVideos);
+
+      // Check if course is completed and when
+      const { data: courseData, error: courseError } = await supabase
+        .from('user_course_progress')
+        .select('completed_at')
+        .eq('user_id', creator.id)
+        .eq('completed', true)
+        .single();
+
+      if (courseError && courseError.code !== 'PGRST116') {
+        console.error('[HomeScreen] Error fetching course completion:', courseError);
+      }
+
+      if (courseData?.completed_at) {
+        setAcademyCompletedAt(courseData.completed_at);
+        
+        // Check if 5 days have passed since completion
+        const completedDate = new Date(courseData.completed_at);
+        const fiveDaysLater = new Date(completedDate);
+        fiveDaysLater.setDate(fiveDaysLater.getDate() + 5);
+        const now = new Date();
+        
+        if (now > fiveDaysLater) {
+          // Check if new content has been added since completion
+          const { data: newVideos, error: newVideosError } = await supabase
+            .from('course_videos')
+            .select('id')
+            .gt('created_at', courseData.completed_at);
+
+          if (newVideosError && newVideosError.code !== 'PGRST116') {
+            console.error('[HomeScreen] Error checking new videos:', newVideosError);
+          }
+
+          if (newVideos && newVideos.length > 0) {
+            setShowAcademy(true);
+            console.log('[HomeScreen] Academy shown - new content added');
+          } else {
+            setShowAcademy(false);
+            console.log('[HomeScreen] Academy hidden - 5 days passed since completion, no new content');
+          }
+        }
+      }
     } catch (error: any) {
       console.error('[HomeScreen] Unexpected error fetching education data:', error);
     }
@@ -555,85 +642,154 @@ export default function HomeScreen() {
                 />
               </TouchableOpacity>
 
-              {/* 21-DAY CHALLENGE CARD - NO START BUTTON */}
-              <CardPressable onPress={() => router.push('/(tabs)/challenge-list')}>
-                <View style={styles.darkCard}>
-                  <View style={styles.cardHeaderRow}>
-                    <View style={styles.cardHeaderLeft}>
-                      <View style={styles.pendingDot} />
-                      <Text style={styles.pendingText}>
-                        {challengeProgress 
-                          ? `${challengeProgress.totalDays - challengeProgress.completedDays} PENDING TASKS`
-                          : 'LOADING...'}
-                      </Text>
+              {/* 21-DAY CHALLENGE CARD - WITH VISUAL EMPHASIS */}
+              {showChallenge && (
+                <ImportantCardPressable onPress={() => router.push('/(tabs)/challenge-list')}>
+                  <View style={[styles.darkCard, styles.importantCard]}>
+                    <View style={styles.cardHeaderRow}>
+                      <View style={styles.cardHeaderLeft}>
+                        <View style={styles.pendingDot} />
+                        <Text style={styles.pendingText}>
+                          {challengeProgress 
+                            ? `${challengeProgress.totalDays - challengeProgress.completedDays} PENDING TASKS`
+                            : 'LOADING...'}
+                        </Text>
+                      </View>
+                      <View style={styles.circularProgress}>
+                        <AnimatedNumber 
+                          value={challengePercentage} 
+                          style={styles.circularProgressText}
+                          decimals={0}
+                          suffix="%"
+                          formatNumber={false}
+                          delay={300}
+                          duration={800}
+                        />
+                      </View>
                     </View>
-                    <View style={styles.circularProgress}>
-                      <AnimatedNumber 
-                        value={challengePercentage} 
-                        style={styles.circularProgressText}
-                        decimals={0}
-                        suffix="%"
-                        formatNumber={false}
-                        delay={300}
-                        duration={800}
+
+                    <Text style={styles.cardTitle}>21-Day Challenge</Text>
+
+                    {/* Challenge Days */}
+                    {challengeProgress && (
+                      <View style={styles.challengeDays}>
+                        {[...Array(4)].map((_, i) => {
+                          const dayNum = challengeProgress.currentDay - 1 + i;
+                          const isCompleted = dayNum < challengeProgress.currentDay;
+                          const isCurrent = dayNum === challengeProgress.currentDay;
+                          const isLocked = dayNum > challengeProgress.currentDay;
+
+                          return (
+                            <View key={i} style={styles.challengeDay}>
+                              <View style={[
+                                styles.challengeDayCircle,
+                                isCompleted && styles.challengeDayCompleted,
+                                isCurrent && styles.challengeDayActive,
+                                isLocked && styles.challengeDayLocked,
+                              ]}>
+                                {isCompleted ? (
+                                  <IconSymbol 
+                                    ios_icon_name="checkmark" 
+                                    android_material_icon_name="check" 
+                                    size={20} 
+                                    color="#FFFFFF" 
+                                  />
+                                ) : (
+                                  <Text style={styles.challengeDayNumber}>{dayNum}</Text>
+                                )}
+                              </View>
+                              <Text style={isLocked ? styles.challengeDayLabelLocked : styles.challengeDayLabel}>
+                                Day {dayNum}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )}
+
+                    {/* Continue Button */}
+                    <TouchableOpacity 
+                      style={styles.continueButton}
+                      onPress={() => router.push('/(tabs)/challenge-list')}
+                    >
+                      <Text style={styles.continueButtonText}>Continue Today&apos;s Task</Text>
+                      <IconSymbol 
+                        ios_icon_name="arrow.right" 
+                        android_material_icon_name="arrow-forward" 
+                        size={18} 
+                        color="#FFFFFF" 
                       />
+                    </TouchableOpacity>
+                  </View>
+                </ImportantCardPressable>
+              )}
+
+              {/* ACADEMY CARD - WITH VISUAL EMPHASIS - REPOSITIONED ABOVE TOP 3 */}
+              {showAcademy && (
+                <ImportantCardPressable onPress={() => router.push('/(tabs)/academy')}>
+                  <View style={[styles.darkCard, styles.importantCard]}>
+                    <View style={styles.cardHeaderRow}>
+                      <View style={styles.cardHeaderLeft}>
+                        <Text style={styles.cardTitle}>Academy</Text>
+                      </View>
+                      <View style={styles.requiredBadge}>
+                        <Text style={styles.requiredBadgeText}>REQUIRED</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.academyContent}>
+                      <View style={styles.academyLeft}>
+                        <Text style={styles.academyProgressLabel}>Video Progress</Text>
+                        <View style={styles.academyProgressValueRow}>
+                          <AnimatedNumber 
+                            value={educationProgress} 
+                            style={styles.academyProgressValue}
+                            formatNumber={false}
+                            delay={400}
+                            duration={800}
+                          />
+                          <Text style={styles.academyProgressValue}>/{totalCourseVideos}</Text>
+                        </View>
+                        
+                        <AnimatedProgressBar
+                          percentage={(educationProgress / totalCourseVideos) * 100}
+                          height={6}
+                          containerStyle={{ marginBottom: 12 }}
+                          delay={500}
+                          duration={1000}
+                        />
+
+                        <View style={styles.quizStatus}>
+                          <IconSymbol 
+                            ios_icon_name="lock.fill" 
+                            android_material_icon_name="lock" 
+                            size={14} 
+                            color="#A0A0A0" 
+                          />
+                          <Text style={styles.quizStatusText}>Quiz: Not started</Text>
+                        </View>
+
+                        <TouchableOpacity>
+                          <Text style={styles.continueLink}>Continue learning</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      <View style={styles.academyRight}>
+                        <View style={styles.videoThumbnail}>
+                          <View style={styles.playIconContainer}>
+                            <IconSymbol 
+                              ios_icon_name="play.fill" 
+                              android_material_icon_name="play-arrow" 
+                              size={32} 
+                              color="#FFFFFF" 
+                            />
+                          </View>
+                        </View>
+                      </View>
                     </View>
                   </View>
-
-                  <Text style={styles.cardTitle}>21-Day Challenge</Text>
-
-                  {/* Challenge Days */}
-                  {challengeProgress && (
-                    <View style={styles.challengeDays}>
-                      {[...Array(4)].map((_, i) => {
-                        const dayNum = challengeProgress.currentDay - 1 + i;
-                        const isCompleted = dayNum < challengeProgress.currentDay;
-                        const isCurrent = dayNum === challengeProgress.currentDay;
-                        const isLocked = dayNum > challengeProgress.currentDay;
-
-                        return (
-                          <View key={i} style={styles.challengeDay}>
-                            <View style={[
-                              styles.challengeDayCircle,
-                              isCompleted && styles.challengeDayCompleted,
-                              isCurrent && styles.challengeDayActive,
-                              isLocked && styles.challengeDayLocked,
-                            ]}>
-                              {isCompleted ? (
-                                <IconSymbol 
-                                  ios_icon_name="checkmark" 
-                                  android_material_icon_name="check" 
-                                  size={20} 
-                                  color="#FFFFFF" 
-                                />
-                              ) : (
-                                <Text style={styles.challengeDayNumber}>{dayNum}</Text>
-                              )}
-                            </View>
-                            <Text style={isLocked ? styles.challengeDayLabelLocked : styles.challengeDayLabel}>
-                              Day {dayNum}
-                            </Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  )}
-
-                  {/* Continue Button */}
-                  <TouchableOpacity 
-                    style={styles.continueButton}
-                    onPress={() => router.push('/(tabs)/challenge-list')}
-                  >
-                    <Text style={styles.continueButtonText}>Continue Today&apos;s Task</Text>
-                    <IconSymbol 
-                      ios_icon_name="arrow.right" 
-                      android_material_icon_name="arrow-forward" 
-                      size={18} 
-                      color="#FFFFFF" 
-                    />
-                  </TouchableOpacity>
-                </View>
-              </CardPressable>
+                </ImportantCardPressable>
+              )}
 
               {/* TOP 3 IN THE NETWORK */}
               <View style={styles.darkCard}>
@@ -712,71 +868,6 @@ export default function HomeScreen() {
                   <Text style={styles.noDataText}>No data available</Text>
                 )}
               </View>
-
-              {/* ACADEMY CARD */}
-              <CardPressable onPress={() => router.push('/(tabs)/academy')}>
-                <View style={styles.darkCard}>
-                  <View style={styles.cardHeaderRow}>
-                    <View style={styles.cardHeaderLeft}>
-                      <Text style={styles.cardTitle}>Academy</Text>
-                    </View>
-                    <View style={styles.requiredBadge}>
-                      <Text style={styles.requiredBadgeText}>REQUIRED</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.academyContent}>
-                    <View style={styles.academyLeft}>
-                      <Text style={styles.academyProgressLabel}>Video Progress</Text>
-                      <View style={styles.academyProgressValueRow}>
-                        <AnimatedNumber 
-                          value={educationProgress} 
-                          style={styles.academyProgressValue}
-                          formatNumber={false}
-                          delay={400}
-                          duration={800}
-                        />
-                        <Text style={styles.academyProgressValue}>/5</Text>
-                      </View>
-                      
-                      <AnimatedProgressBar
-                        percentage={(educationProgress / 5) * 100}
-                        height={6}
-                        containerStyle={{ marginBottom: 12 }}
-                        delay={500}
-                        duration={1000}
-                      />
-
-                      <View style={styles.quizStatus}>
-                        <IconSymbol 
-                          ios_icon_name="lock.fill" 
-                          android_material_icon_name="lock" 
-                          size={14} 
-                          color="#A0A0A0" 
-                        />
-                        <Text style={styles.quizStatusText}>Quiz: Not started</Text>
-                      </View>
-
-                      <TouchableOpacity>
-                        <Text style={styles.continueLink}>Continue learning</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.academyRight}>
-                      <View style={styles.videoThumbnail}>
-                        <View style={styles.playIconContainer}>
-                          <IconSymbol 
-                            ios_icon_name="play.fill" 
-                            android_material_icon_name="play-arrow" 
-                            size={32} 
-                            color="#FFFFFF" 
-                          />
-                        </View>
-                      </View>
-                    </View>
-                  </View>
-                </View>
-              </CardPressable>
 
               {/* MANAGER CARD - FROM SUPABASE */}
               <CardPressable onPress={handleManagerCardPress}>
@@ -974,6 +1065,59 @@ function CardPressable({ children, onPress }: { children: React.ReactNode; onPre
       onPress={onPress}
     >
       <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+        {children}
+      </Animated.View>
+    </TouchableOpacity>
+  );
+}
+
+// Important Card with subtle visual emphasis (elevation + micro-animation)
+function ImportantCardPressable({ children, onPress }: { children: React.ReactNode; onPress: () => void }) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    // Subtle pulse animation loop
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.01,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.97,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 4,
+      tension: 50,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  return (
+    <TouchableOpacity
+      activeOpacity={1}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      onPress={onPress}
+    >
+      <Animated.View style={{ transform: [{ scale: Animated.multiply(scaleAnim, pulseAnim) }] }}>
         {children}
       </Animated.View>
     </TouchableOpacity>
@@ -1185,6 +1329,13 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 20,
     marginBottom: 16,
+  },
+  // IMPORTANT CARD - VISUAL EMPHASIS
+  importantCard: {
+    borderWidth: 2,
+    borderColor: 'rgba(102, 66, 239, 0.3)',
+    boxShadow: '0px 8px 24px rgba(102, 66, 239, 0.2)',
+    elevation: 8,
   },
   cardHeaderRow: {
     flexDirection: 'row',
