@@ -65,6 +65,7 @@ function getTierCheckmarkColor(tier: string): string {
 
 interface TopCreator {
   creator_handle: string;
+  diamonds_monthly: number;
   total_diamonds: number;
   avatar_url: string | null;
   profile_picture_url: string | null;
@@ -227,11 +228,12 @@ export default function HomeScreen() {
     if (!creator) return;
 
     try {
-      // Fetch top 3 creators by total_diamonds with region
+      // Fetch top 3 creators by diamonds_monthly (current month performance) with region
       const { data: topCreatorsData, error: topCreatorsError } = await supabase
         .from('creators')
-        .select('creator_handle, total_diamonds, avatar_url, profile_picture_url, region')
+        .select('creator_handle, diamonds_monthly, total_diamonds, avatar_url, profile_picture_url, region')
         .eq('is_active', true)
+        .order('diamonds_monthly', { ascending: false })
         .order('total_diamonds', { ascending: false })
         .limit(3);
 
@@ -242,18 +244,19 @@ export default function HomeScreen() {
         setTopCreators(topCreatorsData || []);
       }
 
-      // Fetch user's rank
+      // Fetch user's rank using the updated function
       const { data: rankData, error: rankError } = await supabase.rpc('get_creator_rank', {
         p_creator_id: creator.id
       });
 
       if (rankError) {
         console.error('[HomeScreen] Error fetching user rank:', rankError);
-        // Fallback: calculate rank manually
+        // Fallback: calculate rank manually using diamonds_monthly
         const { data: allCreators, error: allError } = await supabase
           .from('creators')
-          .select('id, total_diamonds')
+          .select('id, diamonds_monthly, total_diamonds')
           .eq('is_active', true)
+          .order('diamonds_monthly', { ascending: false })
           .order('total_diamonds', { ascending: false });
 
         if (!allError && allCreators) {
@@ -626,7 +629,7 @@ export default function HomeScreen() {
               {/* TOP 3 IN THE NETWORK */}
               <View style={styles.darkCard}>
                 <Text style={styles.cardTitle}>Top 3 in the Network</Text>
-                <Text style={styles.topCreatorsSubtitle}>Leading creators by diamonds earned</Text>
+                <Text style={styles.topCreatorsSubtitle}>Leading creators by monthly diamonds</Text>
                 
                 {topCreators.length > 0 ? (
                   <>
@@ -656,7 +659,7 @@ export default function HomeScreen() {
                           <Text style={styles.topCreatorHandle}>@{topCreator.creator_handle}</Text>
                           <View style={styles.topCreatorMetaRow}>
                             <Text style={styles.topCreatorDiamonds}>
-                              {topCreator.total_diamonds.toLocaleString()} 💎
+                              {topCreator.diamonds_monthly.toLocaleString()} 💎 this month
                             </Text>
                             <View style={styles.topCreatorRegionBadge}>
                               <Text style={styles.topCreatorRegionText}>
@@ -687,9 +690,9 @@ export default function HomeScreen() {
                           </View>
                           <View style={styles.yourRankDivider} />
                           <View style={styles.yourRankStats}>
-                            <Text style={styles.yourRankStatsLabel}>Total Diamonds</Text>
+                            <Text style={styles.yourRankStatsLabel}>Monthly Diamonds</Text>
                             <Text style={styles.yourRankStatsValue}>
-                              {creator.total_diamonds.toLocaleString()} 💎
+                              {creator.diamonds_monthly.toLocaleString()} 💎
                             </Text>
                           </View>
                         </View>
