@@ -17,6 +17,8 @@ import { colors } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { HeaderRightButton, HeaderLeftButton } from "@/components/HeaderButtons";
 import { useCreatorData } from "@/hooks/useCreatorData";
+import { AnimatedCard } from "@/components/AnimatedCard";
+import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 
 const { width } = Dimensions.get('window');
@@ -178,7 +180,7 @@ export default function HomeScreen() {
             </View>
           </Animated.View>
 
-          <Animated.View style={{ opacity: fadeAnim }}>
+          <AnimatedCard delay={100} animationType="fadeSlide">
             <CardPressable onPress={() => console.log('Monthly Diamonds tapped')}>
               <LinearGradient
                 colors={['#FFFFFF', '#FAF5FF']}
@@ -194,7 +196,10 @@ export default function HomeScreen() {
                     style={styles.progressRing}
                   >
                     <View style={styles.progressRingInner}>
-                      <Text style={styles.diamondNumber}>{stats.monthlyDiamonds}</Text>
+                      <AnimatedNumber 
+                        value={stats.monthlyDiamonds}
+                        style={styles.diamondNumber}
+                      />
                       <Text style={styles.diamondLabel}>💎</Text>
                     </View>
                   </LinearGradient>
@@ -203,7 +208,9 @@ export default function HomeScreen() {
                 </View>
               </LinearGradient>
             </CardPressable>
+          </AnimatedCard>
 
+          <AnimatedCard delay={200} animationType="fadeSlide">
             <CardPressable onPress={() => console.log('Next Graduation tapped')}>
               <View style={styles.card}>
                 <View style={styles.cardHeader}>
@@ -237,7 +244,9 @@ export default function HomeScreen() {
                 </View>
               </View>
             </CardPressable>
+          </AnimatedCard>
 
+          <AnimatedCard delay={300} animationType="fadeSlide">
             <CardPressable onPress={() => console.log('Missions tapped')}>
               <View style={styles.card}>
                 <View style={styles.cardHeader}>
@@ -306,7 +315,9 @@ export default function HomeScreen() {
                 </View>
               </View>
             </CardPressable>
+          </AnimatedCard>
 
+          <AnimatedCard delay={400} animationType="fadeSlide">
             <CardPressable onPress={() => console.log('LIVE Activity tapped')}>
               <View style={styles.card}>
                 <View style={styles.cardHeader}>
@@ -323,7 +334,10 @@ export default function HomeScreen() {
                     end={{ x: 1, y: 1 }}
                     style={styles.statCapsule}
                   >
-                    <Text style={styles.statValue}>{stats.liveDays}</Text>
+                    <AnimatedNumber 
+                      value={stats.liveDays}
+                      style={styles.statValue}
+                    />
                     <Text style={styles.statLabel}>LIVE Days</Text>
                   </LinearGradient>
                   <LinearGradient
@@ -332,7 +346,10 @@ export default function HomeScreen() {
                     end={{ x: 1, y: 1 }}
                     style={styles.statCapsule}
                   >
-                    <Text style={styles.statValue}>{stats.liveHours}</Text>
+                    <AnimatedNumber 
+                      value={stats.liveHours}
+                      style={styles.statValue}
+                    />
                     <Text style={styles.statLabel}>Hours</Text>
                   </LinearGradient>
                   <LinearGradient
@@ -341,7 +358,10 @@ export default function HomeScreen() {
                     end={{ x: 1, y: 1 }}
                     style={styles.statCapsule}
                   >
-                    <Text style={styles.statValue}>{stats.diamondsToday}</Text>
+                    <AnimatedNumber 
+                      value={stats.diamondsToday}
+                      style={styles.statValue}
+                    />
                     <Text style={styles.statLabel}>Diamonds</Text>
                   </LinearGradient>
                   <LinearGradient
@@ -350,13 +370,18 @@ export default function HomeScreen() {
                     end={{ x: 1, y: 1 }}
                     style={styles.statCapsule}
                   >
-                    <Text style={styles.statValue}>{stats.streak}</Text>
+                    <AnimatedNumber 
+                      value={stats.streak}
+                      style={styles.statValue}
+                    />
                     <Text style={styles.statLabel}>Day Streak 🔥</Text>
                   </LinearGradient>
                 </View>
               </View>
             </CardPressable>
+          </AnimatedCard>
 
+          <AnimatedCard delay={500} animationType="fadeSlide">
             <CardPressable onPress={() => console.log('Battles tapped')}>
               <View style={styles.card}>
                 <View style={styles.cardHeader}>
@@ -398,7 +423,9 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               </View>
             </CardPressable>
+          </AnimatedCard>
 
+          <AnimatedCard delay={600} animationType="fadeSlide">
             <CardPressable onPress={() => console.log('Tools tapped')}>
               <View style={styles.card}>
                 <View style={styles.cardHeader}>
@@ -460,7 +487,9 @@ export default function HomeScreen() {
                 </View>
               </View>
             </CardPressable>
+          </AnimatedCard>
 
+          <AnimatedCard delay={700} animationType="fadeSlide">
             <CardPressable onPress={() => console.log('Manager tapped')}>
               <View style={styles.card}>
                 <View style={styles.cardHeader}>
@@ -487,7 +516,7 @@ export default function HomeScreen() {
                 )}
               </View>
             </CardPressable>
-          </Animated.View>
+          </AnimatedCard>
         </Animated.ScrollView>
       </View>
     </>

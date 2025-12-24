@@ -15,6 +15,7 @@ import { useCreatorData } from '@/hooks/useCreatorData';
 import { IconSymbol } from '@/components/IconSymbol';
 import { AnimatedNumber } from '@/components/AnimatedNumber';
 import { AnimatedProgressBar } from '@/components/AnimatedProgressBar';
+import { AnimatedCard } from '@/components/AnimatedCard';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold, Poppins_800ExtraBold } from '@expo-google-fonts/poppins';
 
 interface BonusTier {
@@ -221,396 +222,408 @@ export default function BonusDetailsScreen() {
       />
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         {/* Current Month Label */}
-        <Text style={styles.monthLabel}>{currentMonth}</Text>
+        <AnimatedCard delay={0} animationType="fade">
+          <Text style={styles.monthLabel}>{currentMonth}</Text>
+        </AnimatedCard>
 
         {/* Hero Section - Cohesive Card with LIVE Hours and LIVE Days */}
-        <View style={styles.heroCard}>
-          <View style={styles.heroHeader}>
-            <View style={styles.tierBadge}>
-              <IconSymbol
-                ios_icon_name="checkmark.seal.fill"
-                android_material_icon_name="verified"
-                size={24}
-                color={currentTier === 'Gold' ? '#FFD700' : currentTier === 'Silver' ? '#C0C0C0' : '#10B981'}
-              />
-              <Text style={styles.tierText}>{currentTier}</Text>
+        <AnimatedCard delay={100} animationType="fadeSlide">
+          <View style={styles.heroCard}>
+            <View style={styles.heroHeader}>
+              <View style={styles.tierBadge}>
+                <IconSymbol
+                  ios_icon_name="checkmark.seal.fill"
+                  android_material_icon_name="verified"
+                  size={24}
+                  color={currentTier === 'Gold' ? '#FFD700' : currentTier === 'Silver' ? '#C0C0C0' : '#10B981'}
+                />
+                <Text style={styles.tierText}>{currentTier}</Text>
+              </View>
             </View>
-          </View>
 
-          <View style={styles.heroContent}>
-            <Text style={styles.heroLabel}>Monthly Diamonds</Text>
-            <AnimatedNumber
-              value={creator.diamonds_monthly || 0}
-              style={styles.heroDiamonds}
-            />
-          </View>
+            <View style={styles.heroContent}>
+              <Text style={styles.heroLabel}>Monthly Diamonds</Text>
+              <AnimatedNumber
+                value={creator.diamonds_monthly || 0}
+                style={styles.heroDiamonds}
+              />
+            </View>
 
-          {/* LIVE Hours and LIVE Days */}
-          <View style={styles.liveStatsContainer}>
-            <View style={styles.liveStatItem}>
-              <IconSymbol
-                ios_icon_name="clock.fill"
-                android_material_icon_name="access-time"
-                size={20}
-                color="rgba(255, 255, 255, 0.9)"
-              />
-              <Text style={styles.liveStatLabel}>LIVE Hours</Text>
-              <AnimatedNumber
-                value={liveHours}
-                style={styles.liveStatValue}
-                formatNumber={false}
-              />
-            </View>
-            <View style={styles.liveStatDivider} />
-            <View style={styles.liveStatItem}>
-              <IconSymbol
-                ios_icon_name="calendar.badge.clock"
-                android_material_icon_name="calendar-today"
-                size={20}
-                color="rgba(255, 255, 255, 0.9)"
-              />
-              <Text style={styles.liveStatLabel}>LIVE Days</Text>
-              <AnimatedNumber
-                value={liveDays}
-                style={styles.liveStatValue}
-                formatNumber={false}
-              />
+            {/* LIVE Hours and LIVE Days */}
+            <View style={styles.liveStatsContainer}>
+              <View style={styles.liveStatItem}>
+                <IconSymbol
+                  ios_icon_name="clock.fill"
+                  android_material_icon_name="access-time"
+                  size={20}
+                  color="rgba(255, 255, 255, 0.9)"
+                />
+                <Text style={styles.liveStatLabel}>LIVE Hours</Text>
+                <AnimatedNumber
+                  value={liveHours}
+                  style={styles.liveStatValue}
+                  formatNumber={false}
+                />
+              </View>
+              <View style={styles.liveStatDivider} />
+              <View style={styles.liveStatItem}>
+                <IconSymbol
+                  ios_icon_name="calendar.badge.clock"
+                  android_material_icon_name="calendar-today"
+                  size={20}
+                  color="rgba(255, 255, 255, 0.9)"
+                />
+                <Text style={styles.liveStatLabel}>LIVE Days</Text>
+                <AnimatedNumber
+                  value={liveDays}
+                  style={styles.liveStatValue}
+                  formatNumber={false}
+                />
+              </View>
             </View>
           </View>
-        </View>
+        </AnimatedCard>
 
         {/* Your Bonus for This Month - GREEN CARD */}
-        <View style={styles.bonusCardGreen}>
-          <Text style={styles.bonusCardTitle}>Your bonus for this month</Text>
-          
-          {/* BONUS AMOUNT */}
-          <View style={styles.bonusMainSection}>
-            <View style={styles.bonusMainAmountContainer}>
-              <Text style={styles.bonusMainAmount}>$150</Text>
-              <Text style={styles.bonusMainLabel}>Total Bonus</Text>
-            </View>
-            <View style={styles.bonusPayoutRange}>
-              <IconSymbol
-                ios_icon_name="arrow.up.right"
-                android_material_icon_name="trending-up"
-                size={32}
-                color="#FFFFFF"
-              />
-              <Text style={styles.bonusPayoutRangeText}>$100 - $200 range</Text>
+        <AnimatedCard delay={200} animationType="fadeSlide">
+          <View style={styles.bonusCardGreen}>
+            <Text style={styles.bonusCardTitle}>Your bonus for this month</Text>
+            
+            {/* BONUS AMOUNT */}
+            <View style={styles.bonusMainSection}>
+              <View style={styles.bonusMainAmountContainer}>
+                <Text style={styles.bonusMainAmount}>$150</Text>
+                <Text style={styles.bonusMainLabel}>Total Bonus</Text>
+              </View>
+              <View style={styles.bonusPayoutRange}>
+                <IconSymbol
+                  ios_icon_name="arrow.up.right"
+                  android_material_icon_name="trending-up"
+                  size={32}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.bonusPayoutRangeText}>$100 - $200 range</Text>
+              </View>
             </View>
           </View>
-        </View>
+        </AnimatedCard>
 
         {/* Your Next Bonus Section */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Your next bonus</Text>
-          
-          {nextBonusTier ? (
-            <>
-              <View style={styles.nextBonusHeader}>
-                <Text style={styles.nextBonusTierName}>{nextBonusTier.name}</Text>
-                <Text style={styles.nextBonusPayout}>
-                  ${nextBonusTier.minPayout}–${nextBonusTier.maxPayout}
-                </Text>
-              </View>
-
-              {/* Diamonds Remaining Message */}
-              <View style={styles.diamondsRemainingContainer}>
-                <IconSymbol
-                  ios_icon_name="sparkles"
-                  android_material_icon_name="auto-awesome"
-                  size={20}
-                  color={colors.primary}
-                />
-                <Text style={styles.diamondsRemainingText}>
-                  <AnimatedNumber 
-                    value={diamondsRemaining} 
-                    style={styles.diamondsRemainingNumber}
-                    formatNumber={true}
-                  />
-                  <Text style={styles.diamondsRemainingText}> diamonds remaining to reach {nextBonusTier.name}</Text>
-                </Text>
-              </View>
-
-              <AnimatedProgressBar
-                percentage={nextBonusProgress}
-                height={12}
-                backgroundColor="rgba(102, 66, 239, 0.2)"
-                fillColor="#10B981"
-                containerStyle={{ marginBottom: 20 }}
-              />
-
-              <Text style={styles.requirementsTitle}>Requirements Status</Text>
-
-              {/* LIVE Days */}
-              <View style={styles.requirementStatusRow}>
-                <View style={styles.requirementStatusLeft}>
-                  <IconSymbol
-                    ios_icon_name="calendar"
-                    android_material_icon_name="calendar-today"
-                    size={20}
-                    color={colors.textSecondary}
-                  />
-                  <Text style={styles.requirementStatusLabel}>LIVE Days</Text>
-                </View>
-                <View style={styles.requirementStatusRight}>
-                  <Text style={styles.requirementStatusValue}>
-                    {liveDays} / {nextBonusTier.minDays}
+        <AnimatedCard delay={300} animationType="fadeSlide">
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Your next bonus</Text>
+            
+            {nextBonusTier ? (
+              <>
+                <View style={styles.nextBonusHeader}>
+                  <Text style={styles.nextBonusTierName}>{nextBonusTier.name}</Text>
+                  <Text style={styles.nextBonusPayout}>
+                    ${nextBonusTier.minPayout}–${nextBonusTier.maxPayout}
                   </Text>
-                  {liveDaysComplete ? (
-                    <View style={styles.statusCircleComplete}>
-                      <IconSymbol 
-                        ios_icon_name="checkmark" 
-                        android_material_icon_name="check" 
-                        size={14} 
-                        color="#FFFFFF" 
-                      />
-                    </View>
-                  ) : (
-                    <View style={styles.statusCircleEmpty} />
-                  )}
-                </View>
-              </View>
-
-              {/* LIVE Hours */}
-              <View style={styles.requirementStatusRow}>
-                <View style={styles.requirementStatusLeft}>
-                  <IconSymbol
-                    ios_icon_name="clock"
-                    android_material_icon_name="access-time"
-                    size={20}
-                    color={colors.textSecondary}
-                  />
-                  <Text style={styles.requirementStatusLabel}>LIVE Hours</Text>
-                </View>
-                <View style={styles.requirementStatusRight}>
-                  <Text style={styles.requirementStatusValue}>
-                    {liveHours} / {nextBonusTier.minHours}
-                  </Text>
-                  {liveHoursComplete ? (
-                    <View style={styles.statusCircleComplete}>
-                      <IconSymbol 
-                        ios_icon_name="checkmark" 
-                        android_material_icon_name="check" 
-                        size={14} 
-                        color="#FFFFFF" 
-                      />
-                    </View>
-                  ) : (
-                    <View style={styles.statusCircleEmpty} />
-                  )}
-                </View>
-              </View>
-
-              {/* Battles Booked */}
-              <View style={styles.requirementStatusRow}>
-                <View style={styles.requirementStatusLeft}>
-                  <IconSymbol
-                    ios_icon_name="bolt.fill"
-                    android_material_icon_name="flash-on"
-                    size={20}
-                    color={colors.textSecondary}
-                  />
-                  <Text style={styles.requirementStatusLabel}>Battles Booked</Text>
-                </View>
-                <View style={styles.requirementStatusRight}>
-                  <Text style={styles.requirementStatusValue}>
-                    {battlesBooked} / 1
-                  </Text>
-                  {battlesComplete ? (
-                    <View style={styles.statusCircleComplete}>
-                      <IconSymbol 
-                        ios_icon_name="checkmark" 
-                        android_material_icon_name="check" 
-                        size={14} 
-                        color="#FFFFFF" 
-                      />
-                    </View>
-                  ) : (
-                    <View style={styles.statusCircleEmpty} />
-                  )}
-                </View>
-              </View>
-            </>
-          ) : (
-            <Text style={styles.noNextBonusText}>
-              You&apos;ve reached the highest bonus tier! Keep up the great work.
-            </Text>
-          )}
-        </View>
-
-        {/* How Bonuses Work - Table */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>How Bonuses Work</Text>
-          <Text style={styles.cardSubtitle}>Monthly bonus tiers and requirements</Text>
-
-          {BONUS_TIERS.map((tier, index) => (
-            <View key={tier.name} style={styles.tierTableCard}>
-              <View style={styles.tierTableHeader}>
-                <Text style={styles.tierTableName}>{tier.name}</Text>
-                <Text style={styles.tierTablePayout}>
-                  ${tier.minPayout}–${tier.maxPayout}
-                </Text>
-              </View>
-
-              <View style={styles.tierTableRequirements}>
-                <View style={styles.tierTableRow}>
-                  <IconSymbol
-                    ios_icon_name="calendar"
-                    android_material_icon_name="calendar-today"
-                    size={16}
-                    color={colors.textSecondary}
-                  />
-                  <Text style={styles.tierTableText}>≥{tier.minDays} days</Text>
                 </View>
 
-                <View style={styles.tierTableRow}>
-                  <IconSymbol
-                    ios_icon_name="clock"
-                    android_material_icon_name="access-time"
-                    size={16}
-                    color={colors.textSecondary}
-                  />
-                  <Text style={styles.tierTableText}>≥{tier.minHours} hours</Text>
-                </View>
-
-                <View style={styles.tierTableRow}>
+                {/* Diamonds Remaining Message */}
+                <View style={styles.diamondsRemainingContainer}>
                   <IconSymbol
                     ios_icon_name="sparkles"
                     android_material_icon_name="auto-awesome"
-                    size={16}
-                    color={colors.textSecondary}
-                  />
-                  <Text style={styles.tierTableText}>
-                    {(tier.minDiamonds / 1000).toFixed(0)}K ≤ diamonds {'<'} {(tier.maxDiamonds / 1000000).toFixed(1)}M
-                  </Text>
-                </View>
-              </View>
-            </View>
-          ))}
-        </View>
-
-        {/* Bonus Calculator */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <IconSymbol
-              ios_icon_name="calculator.fill"
-              android_material_icon_name="calculate"
-              size={32}
-              color={colors.primary}
-            />
-            <Text style={styles.cardTitle}>Bonus Calculator</Text>
-          </View>
-
-          <Text style={styles.calculatorSubtitle}>
-            Enter your metrics to see which tier you qualify for
-          </Text>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Days Streamed</Text>
-            <TextInput
-              style={styles.input}
-              value={calcDays}
-              onChangeText={setCalcDays}
-              keyboardType="numeric"
-              placeholder="e.g., 21, 23, 24"
-              placeholderTextColor={colors.textTertiary}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Hours Streamed</Text>
-            <TextInput
-              style={styles.input}
-              value={calcHours}
-              onChangeText={setCalcHours}
-              placeholder="e.g., 100, 65.5, or 65:30"
-              placeholderTextColor={colors.textTertiary}
-            />
-            <Text style={styles.inputHint}>Accepts HH:MM, decimals, or whole numbers</Text>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Diamonds</Text>
-            <TextInput
-              style={styles.input}
-              value={calcDiamonds}
-              onChangeText={setCalcDiamonds}
-              keyboardType="numeric"
-              placeholder="e.g., 1600000"
-              placeholderTextColor={colors.textTertiary}
-            />
-          </View>
-
-          <TouchableOpacity style={styles.calculateButton} onPress={handleCalculate}>
-            <Text style={styles.calculateButtonText}>Calculate Tier</Text>
-          </TouchableOpacity>
-
-          {calcResult && (
-            <View style={styles.calcResultContainer}>
-              <View style={styles.calcResultHeader}>
-                <Text style={styles.calcResultTitle}>
-                  {calcResult.tier ? `Qualified: ${calcResult.tier.name}` : 'No Tier Qualified'}
-                </Text>
-                {calcResult.tier && (
-                  <Text style={styles.calcResultPayout}>
-                    ${calcResult.tier.minPayout}–${calcResult.tier.maxPayout}
-                  </Text>
-                )}
-              </View>
-
-              <Text style={styles.checklistTitle}>Requirements Checklist</Text>
-              {calcResult.checklist.map((item, index) => (
-                <View key={index} style={styles.checklistSection}>
-                  <Text style={styles.checklistTierName}>{item.tier}</Text>
-                  <View style={styles.checklistItems}>
-                    <View style={styles.checklistItem}>
-                      <IconSymbol
-                        ios_icon_name={item.days ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
-                        android_material_icon_name={item.days ? 'check-circle' : 'cancel'}
-                        size={20}
-                        color={item.days ? colors.success : colors.error}
-                      />
-                      <Text style={styles.checklistItemText}>Days</Text>
-                    </View>
-                    <View style={styles.checklistItem}>
-                      <IconSymbol
-                        ios_icon_name={item.hours ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
-                        android_material_icon_name={item.hours ? 'check-circle' : 'cancel'}
-                        size={20}
-                        color={item.hours ? colors.success : colors.error}
-                      />
-                      <Text style={styles.checklistItemText}>Hours</Text>
-                    </View>
-                    <View style={styles.checklistItem}>
-                      <IconSymbol
-                        ios_icon_name={item.diamonds ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
-                        android_material_icon_name={item.diamonds ? 'check-circle' : 'cancel'}
-                        size={20}
-                        color={item.diamonds ? colors.success : colors.error}
-                      />
-                      <Text style={styles.checklistItemText}>Diamonds</Text>
-                    </View>
-                  </View>
-                </View>
-              ))}
-
-              {!calcResult.tier && (
-                <View style={styles.noTierMessage}>
-                  <IconSymbol
-                    ios_icon_name="info.circle.fill"
-                    android_material_icon_name="info"
-                    size={24}
+                    size={20}
                     color={colors.primary}
                   />
-                  <Text style={styles.noTierMessageText}>
-                    You need to meet all requirements (days, hours, and diamonds) to qualify for a tier.
+                  <Text style={styles.diamondsRemainingText}>
+                    <AnimatedNumber 
+                      value={diamondsRemaining} 
+                      style={styles.diamondsRemainingNumber}
+                      formatNumber={true}
+                    />
+                    <Text style={styles.diamondsRemainingText}> diamonds remaining to reach {nextBonusTier.name}</Text>
                   </Text>
                 </View>
-              )}
+
+                <AnimatedProgressBar
+                  percentage={nextBonusProgress}
+                  height={12}
+                  backgroundColor="rgba(102, 66, 239, 0.2)"
+                  fillColor="#10B981"
+                  containerStyle={{ marginBottom: 20 }}
+                />
+
+                <Text style={styles.requirementsTitle}>Requirements Status</Text>
+
+                {/* LIVE Days */}
+                <View style={styles.requirementStatusRow}>
+                  <View style={styles.requirementStatusLeft}>
+                    <IconSymbol
+                      ios_icon_name="calendar"
+                      android_material_icon_name="calendar-today"
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                    <Text style={styles.requirementStatusLabel}>LIVE Days</Text>
+                  </View>
+                  <View style={styles.requirementStatusRight}>
+                    <Text style={styles.requirementStatusValue}>
+                      {liveDays} / {nextBonusTier.minDays}
+                    </Text>
+                    {liveDaysComplete ? (
+                      <View style={styles.statusCircleComplete}>
+                        <IconSymbol 
+                          ios_icon_name="checkmark" 
+                          android_material_icon_name="check" 
+                          size={14} 
+                          color="#FFFFFF" 
+                        />
+                      </View>
+                    ) : (
+                      <View style={styles.statusCircleEmpty} />
+                    )}
+                  </View>
+                </View>
+
+                {/* LIVE Hours */}
+                <View style={styles.requirementStatusRow}>
+                  <View style={styles.requirementStatusLeft}>
+                    <IconSymbol
+                      ios_icon_name="clock"
+                      android_material_icon_name="access-time"
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                    <Text style={styles.requirementStatusLabel}>LIVE Hours</Text>
+                  </View>
+                  <View style={styles.requirementStatusRight}>
+                    <Text style={styles.requirementStatusValue}>
+                      {liveHours} / {nextBonusTier.minHours}
+                    </Text>
+                    {liveHoursComplete ? (
+                      <View style={styles.statusCircleComplete}>
+                        <IconSymbol 
+                          ios_icon_name="checkmark" 
+                          android_material_icon_name="check" 
+                          size={14} 
+                          color="#FFFFFF" 
+                        />
+                      </View>
+                    ) : (
+                      <View style={styles.statusCircleEmpty} />
+                    )}
+                  </View>
+                </View>
+
+                {/* Battles Booked */}
+                <View style={styles.requirementStatusRow}>
+                  <View style={styles.requirementStatusLeft}>
+                    <IconSymbol
+                      ios_icon_name="bolt.fill"
+                      android_material_icon_name="flash-on"
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                    <Text style={styles.requirementStatusLabel}>Battles Booked</Text>
+                  </View>
+                  <View style={styles.requirementStatusRight}>
+                    <Text style={styles.requirementStatusValue}>
+                      {battlesBooked} / 1
+                    </Text>
+                    {battlesComplete ? (
+                      <View style={styles.statusCircleComplete}>
+                        <IconSymbol 
+                          ios_icon_name="checkmark" 
+                          android_material_icon_name="check" 
+                          size={14} 
+                          color="#FFFFFF" 
+                        />
+                      </View>
+                    ) : (
+                      <View style={styles.statusCircleEmpty} />
+                    )}
+                  </View>
+                </View>
+              </>
+            ) : (
+              <Text style={styles.noNextBonusText}>
+                You&apos;ve reached the highest bonus tier! Keep up the great work.
+              </Text>
+            )}
+          </View>
+        </AnimatedCard>
+
+        {/* How Bonuses Work - Table */}
+        <AnimatedCard delay={400} animationType="fadeSlide">
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>How Bonuses Work</Text>
+            <Text style={styles.cardSubtitle}>Monthly bonus tiers and requirements</Text>
+
+            {BONUS_TIERS.map((tier, index) => (
+              <View key={tier.name} style={styles.tierTableCard}>
+                <View style={styles.tierTableHeader}>
+                  <Text style={styles.tierTableName}>{tier.name}</Text>
+                  <Text style={styles.tierTablePayout}>
+                    ${tier.minPayout}–${tier.maxPayout}
+                  </Text>
+                </View>
+
+                <View style={styles.tierTableRequirements}>
+                  <View style={styles.tierTableRow}>
+                    <IconSymbol
+                      ios_icon_name="calendar"
+                      android_material_icon_name="calendar-today"
+                      size={16}
+                      color={colors.textSecondary}
+                    />
+                    <Text style={styles.tierTableText}>≥{tier.minDays} days</Text>
+                  </View>
+
+                  <View style={styles.tierTableRow}>
+                    <IconSymbol
+                      ios_icon_name="clock"
+                      android_material_icon_name="access-time"
+                      size={16}
+                      color={colors.textSecondary}
+                    />
+                    <Text style={styles.tierTableText}>≥{tier.minHours} hours</Text>
+                  </View>
+
+                  <View style={styles.tierTableRow}>
+                    <IconSymbol
+                      ios_icon_name="sparkles"
+                      android_material_icon_name="auto-awesome"
+                      size={16}
+                      color={colors.textSecondary}
+                    />
+                    <Text style={styles.tierTableText}>
+                      {(tier.minDiamonds / 1000).toFixed(0)}K ≤ diamonds {'<'} {(tier.maxDiamonds / 1000000).toFixed(1)}M
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        </AnimatedCard>
+
+        {/* Bonus Calculator */}
+        <AnimatedCard delay={500} animationType="fadeSlide">
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <IconSymbol
+                ios_icon_name="calculator.fill"
+                android_material_icon_name="calculate"
+                size={32}
+                color={colors.primary}
+              />
+              <Text style={styles.cardTitle}>Bonus Calculator</Text>
             </View>
-          )}
-        </View>
+
+            <Text style={styles.calculatorSubtitle}>
+              Enter your metrics to see which tier you qualify for
+            </Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Days Streamed</Text>
+              <TextInput
+                style={styles.input}
+                value={calcDays}
+                onChangeText={setCalcDays}
+                keyboardType="numeric"
+                placeholder="e.g., 21, 23, 24"
+                placeholderTextColor={colors.textTertiary}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Hours Streamed</Text>
+              <TextInput
+                style={styles.input}
+                value={calcHours}
+                onChangeText={setCalcHours}
+                placeholder="e.g., 100, 65.5, or 65:30"
+                placeholderTextColor={colors.textTertiary}
+              />
+              <Text style={styles.inputHint}>Accepts HH:MM, decimals, or whole numbers</Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Diamonds</Text>
+              <TextInput
+                style={styles.input}
+                value={calcDiamonds}
+                onChangeText={setCalcDiamonds}
+                keyboardType="numeric"
+                placeholder="e.g., 1600000"
+                placeholderTextColor={colors.textTertiary}
+              />
+            </View>
+
+            <TouchableOpacity style={styles.calculateButton} onPress={handleCalculate}>
+              <Text style={styles.calculateButtonText}>Calculate Tier</Text>
+            </TouchableOpacity>
+
+            {calcResult && (
+              <View style={styles.calcResultContainer}>
+                <View style={styles.calcResultHeader}>
+                  <Text style={styles.calcResultTitle}>
+                    {calcResult.tier ? `Qualified: ${calcResult.tier.name}` : 'No Tier Qualified'}
+                  </Text>
+                  {calcResult.tier && (
+                    <Text style={styles.calcResultPayout}>
+                      ${calcResult.tier.minPayout}–${calcResult.tier.maxPayout}
+                    </Text>
+                  )}
+                </View>
+
+                <Text style={styles.checklistTitle}>Requirements Checklist</Text>
+                {calcResult.checklist.map((item, index) => (
+                  <View key={index} style={styles.checklistSection}>
+                    <Text style={styles.checklistTierName}>{item.tier}</Text>
+                    <View style={styles.checklistItems}>
+                      <View style={styles.checklistItem}>
+                        <IconSymbol
+                          ios_icon_name={item.days ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
+                          android_material_icon_name={item.days ? 'check-circle' : 'cancel'}
+                          size={20}
+                          color={item.days ? colors.success : colors.error}
+                        />
+                        <Text style={styles.checklistItemText}>Days</Text>
+                      </View>
+                      <View style={styles.checklistItem}>
+                        <IconSymbol
+                          ios_icon_name={item.hours ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
+                          android_material_icon_name={item.hours ? 'check-circle' : 'cancel'}
+                          size={20}
+                          color={item.hours ? colors.success : colors.error}
+                        />
+                        <Text style={styles.checklistItemText}>Hours</Text>
+                      </View>
+                      <View style={styles.checklistItem}>
+                        <IconSymbol
+                          ios_icon_name={item.diamonds ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
+                          android_material_icon_name={item.diamonds ? 'check-circle' : 'cancel'}
+                          size={20}
+                          color={item.diamonds ? colors.success : colors.error}
+                        />
+                        <Text style={styles.checklistItemText}>Diamonds</Text>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+
+                {!calcResult.tier && (
+                  <View style={styles.noTierMessage}>
+                    <IconSymbol
+                      ios_icon_name="info.circle.fill"
+                      android_material_icon_name="info"
+                      size={24}
+                      color={colors.primary}
+                    />
+                    <Text style={styles.noTierMessageText}>
+                      You need to meet all requirements (days, hours, and diamonds) to qualify for a tier.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
+        </AnimatedCard>
       </ScrollView>
     </>
   );
