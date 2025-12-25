@@ -235,7 +235,7 @@ export default function HomeScreen() {
 
       setIsRegisteredForEvent(true);
       console.log('[HomeScreen] Successfully registered for event');
-      Alert.alert('Success', 'You have been registered for this event. You can now join the event!');
+      Alert.alert('Success', 'You have been registered for this event. You can now join!');
     } catch (error: any) {
       console.error('[HomeScreen] Exception during registration:', error);
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
@@ -262,7 +262,7 @@ export default function HomeScreen() {
   const formatEventDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
-      month: 'long',
+      month: 'short',
       day: 'numeric',
       year: 'numeric',
     });
@@ -786,120 +786,59 @@ export default function HomeScreen() {
                 />
               </TouchableOpacity>
 
-              {/* FEATURED UPCOMING LIVE EVENT CARD - POSITIONED ABOVE ACADEMY */}
+              {/* FEATURED UPCOMING LIVE EVENT CARD - SMALL COMPACT VERSION */}
               {featuredLiveEvent && (
-                <ImportantCardPressable onPress={() => router.push('/(tabs)/academy')}>
-                  <View style={[styles.darkCard, styles.featuredEventCard]}>
-                    <View style={styles.featuredEventHeader}>
-                      <View style={styles.featuredEventHeaderLeft}>
-                        <IconSymbol 
-                          ios_icon_name="video.fill" 
-                          android_material_icon_name="videocam" 
-                          size={32} 
-                          color="#FF3B5C" 
-                        />
-                        <View>
-                          <Text style={styles.featuredEventLabel}>UPCOMING LIVE EVENT</Text>
-                          <Text style={styles.featuredEventTitle}>{featuredLiveEvent.event_name}</Text>
-                        </View>
-                      </View>
-                      <View style={styles.livePulseBadge}>
-                        <View style={styles.livePulse} />
-                        <Text style={styles.livePulseBadgeText}>LIVE</Text>
-                      </View>
+                <TouchableOpacity 
+                  style={styles.compactLiveEventCard}
+                  onPress={() => {
+                    if (isRegisteredForEvent) {
+                      handleJoinEvent(featuredLiveEvent);
+                    } else {
+                      handleRegisterForEvent(featuredLiveEvent.id);
+                    }
+                  }}
+                  disabled={registeringEventId === featuredLiveEvent.id}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.compactEventLeft}>
+                    <View style={styles.compactEventIconContainer}>
+                      <IconSymbol 
+                        ios_icon_name="video.fill" 
+                        android_material_icon_name="videocam" 
+                        size={20} 
+                        color="#FF3B5C" 
+                      />
                     </View>
-
-                    {featuredLiveEvent.event_info && (
-                      <Text style={styles.featuredEventDescription} numberOfLines={2}>
-                        {featuredLiveEvent.event_info}
+                    <View style={styles.compactEventInfo}>
+                      <Text style={styles.compactEventTitle} numberOfLines={1}>
+                        {featuredLiveEvent.event_name}
                       </Text>
-                    )}
-
-                    <View style={styles.featuredEventDetails}>
-                      <View style={styles.featuredEventDetailItem}>
-                        <IconSymbol
-                          ios_icon_name="calendar"
-                          android_material_icon_name="calendar-today"
-                          size={18}
-                          color="#FFFFFF"
-                        />
-                        <Text style={styles.featuredEventDetailText}>
+                      <View style={styles.compactEventDateTime}>
+                        <Text style={styles.compactEventDateText}>
                           {formatEventDate(featuredLiveEvent.event_date)}
                         </Text>
-                      </View>
-                      <View style={styles.featuredEventDetailItem}>
-                        <IconSymbol
-                          ios_icon_name="clock"
-                          android_material_icon_name="access-time"
-                          size={18}
-                          color="#FFFFFF"
-                        />
-                        <Text style={styles.featuredEventDetailText}>
+                        <Text style={styles.compactEventDivider}>•</Text>
+                        <Text style={styles.compactEventTimeText}>
                           {featuredLiveEvent.event_hour}
                         </Text>
                       </View>
-                      {featuredLiveEvent.language && (
-                        <View style={styles.featuredEventDetailItem}>
-                          <IconSymbol
-                            ios_icon_name="globe"
-                            android_material_icon_name="language"
-                            size={18}
-                            color="#FFFFFF"
-                          />
-                          <Text style={styles.featuredEventDetailText}>
-                            {featuredLiveEvent.language}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-
-                    {/* CTA Buttons */}
-                    <View style={styles.featuredEventButtonsContainer}>
-                      {/* Register Button */}
-                      <TouchableOpacity
-                        style={[
-                          styles.featuredRegisterButton,
-                          isRegisteredForEvent && styles.featuredRegisterButtonInactive,
-                        ]}
-                        onPress={() => handleRegisterForEvent(featuredLiveEvent.id)}
-                        disabled={isRegisteredForEvent || registeringEventId === featuredLiveEvent.id}
-                        activeOpacity={isRegisteredForEvent ? 1 : 0.7}
-                      >
-                        {registeringEventId === featuredLiveEvent.id ? (
-                          <ActivityIndicator size="small" color="#FFFFFF" />
-                        ) : (
-                          <Text style={styles.featuredRegisterButtonText}>
-                            {isRegisteredForEvent ? 'Registered' : 'Register'}
-                          </Text>
-                        )}
-                      </TouchableOpacity>
-
-                      {/* Join Event Button */}
-                      <TouchableOpacity
-                        style={[
-                          styles.featuredJoinEventButton,
-                          !isRegisteredForEvent && styles.featuredJoinEventButtonDisabled,
-                        ]}
-                        onPress={() => handleJoinEvent(featuredLiveEvent)}
-                        disabled={!isRegisteredForEvent}
-                        activeOpacity={isRegisteredForEvent ? 0.7 : 1}
-                      >
-                        <Text style={[
-                          styles.featuredJoinEventButtonText,
-                          !isRegisteredForEvent && styles.featuredJoinEventButtonTextDisabled,
-                        ]}>
-                          Join Event
-                        </Text>
-                        <IconSymbol 
-                          ios_icon_name="arrow.right" 
-                          android_material_icon_name="arrow-forward" 
-                          size={18} 
-                          color={isRegisteredForEvent ? "#FFFFFF" : "#999999"} 
-                        />
-                      </TouchableOpacity>
                     </View>
                   </View>
-                </ImportantCardPressable>
+                  <View style={styles.compactEventRight}>
+                    {registeringEventId === featuredLiveEvent.id ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <View style={[
+                        styles.compactEventButton,
+                        isRegisteredForEvent && styles.compactEventButtonActive
+                      ]}>
+                        <Text style={styles.compactEventButtonText}>
+                          {isRegisteredForEvent ? 'Join Now' : 'Register'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
               )}
 
               {/* 21-DAY CHALLENGE CARD - WITH VISUAL EMPHASIS */}
@@ -1594,124 +1533,81 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // FEATURED LIVE EVENT CARD - VISUALLY DISTINCT
-  featuredEventCard: {
+  // COMPACT LIVE EVENT CARD - SMALL VERSION
+  compactLiveEventCard: {
     backgroundColor: '#1F1F1F',
-    borderWidth: 3,
-    borderColor: '#FF3B5C',
-    boxShadow: '0px 12px 40px rgba(255, 59, 92, 0.4)',
-    elevation: 15,
-  },
-  featuredEventHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 16,
-  },
-  featuredEventHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 2,
+    borderColor: '#FF3B5C',
+    boxShadow: '0px 4px 12px rgba(255, 59, 92, 0.2)',
+    elevation: 4,
+  },
+  compactEventLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
     gap: 12,
+  },
+  compactEventIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 59, 92, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  compactEventInfo: {
     flex: 1,
   },
-  featuredEventLabel: {
-    fontSize: 10,
-    fontFamily: 'Poppins_700Bold',
-    color: '#FF3B5C',
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  featuredEventTitle: {
-    fontSize: 22,
+  compactEventTitle: {
+    fontSize: 16,
     fontFamily: 'Poppins_700Bold',
     color: '#FFFFFF',
+    marginBottom: 4,
   },
-  livePulseBadge: {
+  compactEventDateTime: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#FF3B5C',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
   },
-  livePulse: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FFFFFF',
-  },
-  livePulseBadgeText: {
-    fontSize: 11,
-    fontFamily: 'Poppins_700Bold',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  featuredEventDescription: {
-    fontSize: 15,
-    fontFamily: 'Poppins_400Regular',
+  compactEventDateText: {
+    fontSize: 13,
+    fontFamily: 'Poppins_500Medium',
     color: '#CCCCCC',
-    marginBottom: 16,
-    lineHeight: 22,
   },
-  featuredEventDetails: {
-    gap: 12,
-    marginBottom: 20,
+  compactEventDivider: {
+    fontSize: 13,
+    fontFamily: 'Poppins_500Medium',
+    color: '#666666',
   },
-  featuredEventDetailItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+  compactEventTimeText: {
+    fontSize: 13,
+    fontFamily: 'Poppins_500Medium',
+    color: '#CCCCCC',
   },
-  featuredEventDetailText: {
-    fontSize: 16,
-    fontFamily: 'Poppins_600SemiBold',
-    color: '#FFFFFF',
+  compactEventRight: {
+    marginLeft: 12,
   },
-  featuredEventButtonsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  featuredRegisterButton: {
-    flex: 1,
-    backgroundColor: '#FF3B5C',
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 56,
-  },
-  featuredRegisterButtonInactive: {
+  compactEventButton: {
     backgroundColor: '#555555',
-    opacity: 0.6,
-  },
-  featuredRegisterButtonText: {
-    fontSize: 16,
-    fontFamily: 'Poppins_700Bold',
-    color: '#FFFFFF',
-  },
-  featuredJoinEventButton: {
-    flex: 1,
-    backgroundColor: '#6642EF',
-    borderRadius: 16,
-    padding: 16,
-    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    minWidth: 90,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    minHeight: 56,
   },
-  featuredJoinEventButtonDisabled: {
-    backgroundColor: '#333333',
-    opacity: 0.4,
+  compactEventButtonActive: {
+    backgroundColor: '#6642EF',
   },
-  featuredJoinEventButtonText: {
-    fontSize: 16,
+  compactEventButtonText: {
+    fontSize: 14,
     fontFamily: 'Poppins_700Bold',
     color: '#FFFFFF',
-  },
-  featuredJoinEventButtonTextDisabled: {
-    color: '#999999',
   },
 
   // DARK CARD STYLES
