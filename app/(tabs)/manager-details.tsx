@@ -26,6 +26,8 @@ interface ManagerData {
   username: string | null;
   whatsapp: string | null;
   role: string;
+  tiktok_handle: string | null;
+  manager_avatar_url: string | null;
 }
 
 export default function ManagerDetailsScreen() {
@@ -62,6 +64,8 @@ export default function ManagerDetailsScreen() {
         .select(`
           id,
           whatsapp,
+          tiktok_handle,
+          avatar_url,
           users:user_id (
             id,
             first_name,
@@ -92,6 +96,8 @@ export default function ManagerDetailsScreen() {
           username: data.users.username,
           whatsapp: data.whatsapp,
           role: data.users.role,
+          tiktok_handle: data.tiktok_handle,
+          manager_avatar_url: data.avatar_url,
         };
 
         console.log('[ManagerDetails] Manager data loaded:', managerData);
@@ -108,11 +114,18 @@ export default function ManagerDetailsScreen() {
   };
 
   const handleTikTokPress = () => {
-    if (!manager?.username) {
+    // Use tiktok_handle from managers table first, fallback to username from users table
+    const tiktokHandle = manager?.tiktok_handle || manager?.username;
+    
+    if (!tiktokHandle) {
       Alert.alert('Info', 'TikTok handle not available');
       return;
     }
-    const url = `https://www.tiktok.com/@${manager.username}`;
+    
+    // Remove @ if it exists at the start
+    const cleanHandle = tiktokHandle.startsWith('@') ? tiktokHandle.slice(1) : tiktokHandle;
+    const url = `https://www.tiktok.com/@${cleanHandle}`;
+    
     Linking.openURL(url).catch(() => {
       Alert.alert('Error', 'Could not open TikTok');
     });
@@ -177,7 +190,11 @@ export default function ManagerDetailsScreen() {
     );
   }
 
-  const profileImageUrl = manager.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop';
+  // Use manager_avatar_url from managers table first, fallback to avatar_url from users table
+  const profileImageUrl = manager.manager_avatar_url || manager.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop';
+  
+  // Use tiktok_handle from managers table first, fallback to username from users table
+  const tiktokHandle = manager.tiktok_handle || manager.username;
 
   return (
     <>
@@ -216,7 +233,7 @@ export default function ManagerDetailsScreen() {
           <Text style={styles.sectionTitle}>Contact Options</Text>
 
           {/* TikTok */}
-          {manager.username && (
+          {tiktokHandle && (
             <TouchableOpacity style={styles.contactCard} onPress={handleTikTokPress}>
               <View style={styles.contactIconContainer}>
                 <IconSymbol
@@ -228,7 +245,9 @@ export default function ManagerDetailsScreen() {
               </View>
               <View style={styles.contactInfo}>
                 <Text style={styles.contactLabel}>TikTok</Text>
-                <Text style={styles.contactValue}>@{manager.username}</Text>
+                <Text style={styles.contactValue}>
+                  {tiktokHandle.startsWith('@') ? tiktokHandle : `@${tiktokHandle}`}
+                </Text>
               </View>
               <IconSymbol
                 ios_icon_name="chevron.right"
