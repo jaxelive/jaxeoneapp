@@ -68,6 +68,11 @@ interface LiveEvent {
   region: string | null;
 }
 
+interface LiveEventRegistration {
+  live_event_id: string;
+  creator_handle: string;
+}
+
 // Hardcoded creator handle - no authentication needed
 const CREATOR_HANDLE = 'avelezsanti';
 
@@ -84,9 +89,11 @@ export default function AcademyScreen() {
   const [videoProgress, setVideoProgress] = useState<VideoProgress[]>([]);
   const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
   const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
+  const [registrations, setRegistrations] = useState<LiveEventRegistration[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [registeringEventId, setRegisteringEventId] = useState<string | null>(null);
 
   useEffect(() => {
     console.log('[Academy] Component mounted for creator:', CREATOR_HANDLE);
@@ -119,6 +126,20 @@ export default function AcademyScreen() {
       } else {
         console.log('[Academy] Live events found:', eventsData?.length || 0);
         setLiveEvents(eventsData || []);
+      }
+
+      // Fetch registrations for this creator
+      console.log('[Academy] Fetching registrations...');
+      const { data: registrationsData, error: registrationsError } = await supabase
+        .from('live_event_registrations')
+        .select('*')
+        .eq('creator_handle', CREATOR_HANDLE);
+
+      if (registrationsError) {
+        console.error('[Academy] Error fetching registrations:', registrationsError);
+      } else {
+        console.log('[Academy] Registrations found:', registrationsData?.length || 0);
+        setRegistrations(registrationsData || []);
       }
 
       // Fetch course content items with videos and quizzes
@@ -217,6 +238,51 @@ export default function AcademyScreen() {
     setRefreshing(true);
     fetchAcademyData();
   }, []);
+
+  const isRegistered = (eventId: string): boolean => {
+    return registrations.some(reg => reg.live_event_id === eventId);
+  };
+
+  const isEventToday = (eventDate: string, eventHour: string): boolean => {
+    const eventDateTime = new Date(`${eventDate}T${eventHour}`);
+    const now = new Date();
+    return (
+      eventDateTime.getFullYear() === now.getFullYear() &&
+      eventDateTime.getMonth() === now.getMonth() &&
+      eventDateTime.getDate() === now.getDate()
+    );
+  };
+
+  const handleRegister = async (eventId: string) => {
+    if (registeringEventId) return; // Prevent multiple simultaneous registrations
+
+    try {
+      console.log('[Academy] Registering for event:', eventId);
+      setRegisteringEventId(eventId);
+
+      const { error } = await supabase
+        .from('live_event_registrations')
+        .insert({
+          live_event_id: eventId,
+          creator_handle: CREATOR_HANDLE,
+        });
+
+      if (error) {
+        console.error('[Academy] Error registering for event:', error);
+        Alert.alert('Error', 'Failed to register for the event. Please try again.');
+        return;
+      }
+
+      // Update local state
+      setRegistrations(prev => [...prev, { live_event_id: eventId, creator_handle: CREATOR_HANDLE }]);
+      console.log('[Academy] Successfully registered for event');
+    } catch (error: any) {
+      console.error('[Academy] Exception during registration:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+    } finally {
+      setRegisteringEventId(null);
+    }
+  };
 
   const handleJoinEvent = async (event: LiveEvent) => {
     if (!event.event_link) {
@@ -364,79 +430,104 @@ export default function AcademyScreen() {
         {liveEvents.length > 0 ? (
           <View style={styles.liveEventsSection}>
             <Text style={styles.sectionTitle}>Upcoming LIVE Events</Text>
-            {liveEvents.map((event) => (
-              <View key={event.id} style={styles.liveEventCard}>
-                <View style={styles.liveEventHeader}>
-                  <Text style={styles.liveEventName}>{event.event_name}</Text>
-                  <View style={styles.liveBadge}>
-                    <Text style={styles.liveBadgeText}>LIVE</Text>
-                  </View>
-                </View>
-                
-                {event.event_info && (
-                  <Text style={styles.liveEventDescription}>{event.event_info}</Text>
-                )}
-                
-                <View style={styles.liveEventDetails}>
-                  <View style={styles.liveEventDetailItem}>
-                    <IconSymbol
-                      ios_icon_name="calendar"
-                      android_material_icon_name="calendar-today"
-                      size={16}
-                      color={colors.textSecondary}
-                    />
-                    <Text style={styles.liveEventDetailText}>
-                      {formatEventDate(event.event_date)}
-                    </Text>
-                  </View>
-                  <View style={styles.liveEventDetailItem}>
-                    <IconSymbol
-                      ios_icon_name="clock"
-                      android_material_icon_name="access-time"
-                      size={16}
-                      color={colors.textSecondary}
-                    />
-                    <Text style={styles.liveEventDetailText}>
-                      {event.event_hour}
-                    </Text>
-                  </View>
-                  {event.language && (
-                    <View style={styles.liveEventDetailItem}>
-                      <IconSymbol
-                        ios_icon_name="globe"
-                        android_material_icon_name="language"
-                        size={16}
-                        color={colors.textSecondary}
-                      />
-                      <Text style={styles.liveEventDetailText}>
-                        {event.language}
-                      </Text>
-                    </View>
-                  )}
-                  {event.region && (
-                    <View style={styles.liveEventDetailItem}>
-                      <IconSymbol
-                        ios_icon_name="location.fill"
-                        android_material_icon_name="location-on"
-                        size={16}
-                        color={colors.textSecondary}
-                      />
-                      <Text style={styles.liveEventDetailText}>
-                        {event.region}
-                      </Text>
-                    </View>
-                  )}
-                </View>
+            {liveEvents.map((event) => {
+              const registered = isRegistered(event.id);
+              const eventIsToday = isEventToday(event.event_date, event.event_hour);
+              const canJoin = registered && eventIsToday;
 
-                <TouchableOpacity
-                  style={styles.joinEventButton}
-                  onPress={() => handleJoinEvent(event)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.joinEventButtonText}>Join Event</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
+              return (
+                <View key={event.id} style={styles.liveEventCard}>
+                  <View style={styles.liveEventHeader}>
+                    <Text style={styles.liveEventName}>{event.event_name}</Text>
+                    <View style={styles.liveBadge}>
+                      <Text style={styles.liveBadgeText}>LIVE</Text>
+                    </View>
+                  </View>
+                  
+                  {event.event_info && (
+                    <Text style={styles.liveEventDescription}>{event.event_info}</Text>
+                  )}
+                  
+                  <View style={styles.liveEventDetails}>
+                    <View style={styles.liveEventDetailItem}>
+                      <IconSymbol
+                        ios_icon_name="calendar"
+                        android_material_icon_name="calendar-today"
+                        size={16}
+                        color={colors.textSecondary}
+                      />
+                      <Text style={styles.liveEventDetailText}>
+                        {formatEventDate(event.event_date)}
+                      </Text>
+                    </View>
+                    <View style={styles.liveEventDetailItem}>
+                      <IconSymbol
+                        ios_icon_name="clock"
+                        android_material_icon_name="access-time"
+                        size={16}
+                        color={colors.textSecondary}
+                      />
+                      <Text style={styles.liveEventDetailText}>
+                        {event.event_hour}
+                      </Text>
+                    </View>
+                    {event.language && (
+                      <View style={styles.liveEventDetailItem}>
+                        <IconSymbol
+                          ios_icon_name="globe"
+                          android_material_icon_name="language"
+                          size={16}
+                          color={colors.textSecondary}
+                        />
+                        <Text style={styles.liveEventDetailText}>
+                          {event.language}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Button Container */}
+                  <View style={styles.eventButtonsContainer}>
+                    {/* Register Button */}
+                    <TouchableOpacity
+                      style={[
+                        styles.registerButton,
+                        registered && styles.registerButtonInactive,
+                      ]}
+                      onPress={() => handleRegister(event.id)}
+                      disabled={registered || registeringEventId === event.id}
+                      activeOpacity={registered ? 1 : 0.7}
+                    >
+                      {registeringEventId === event.id ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text style={styles.registerButtonText}>
+                          {registered ? 'Registered' : 'Register'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+
+                    {/* Join Event Button */}
+                    <TouchableOpacity
+                      style={[
+                        styles.joinEventButton,
+                        !canJoin && styles.joinEventButtonDisabled,
+                      ]}
+                      onPress={() => handleJoinEvent(event)}
+                      disabled={!canJoin}
+                      activeOpacity={canJoin ? 0.7 : 1}
+                    >
+                      <Text style={[
+                        styles.joinEventButtonText,
+                        !canJoin && styles.joinEventButtonTextDisabled,
+                      ]}>
+                        Join Event
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
           </View>
         ) : (
           <View style={styles.noEventsCard}>
@@ -791,7 +882,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_500Medium',
     color: colors.text,
   },
-  joinEventButton: {
+  eventButtonsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  registerButton: {
+    flex: 1,
     backgroundColor: colors.primary,
     borderRadius: 16,
     padding: 16,
@@ -799,10 +895,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 52,
   },
+  registerButtonInactive: {
+    backgroundColor: colors.grey,
+    opacity: 0.6,
+  },
+  registerButtonText: {
+    fontSize: 16,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
+  },
+  joinEventButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
+  },
+  joinEventButtonDisabled: {
+    backgroundColor: colors.grey,
+    opacity: 0.4,
+  },
   joinEventButtonText: {
     fontSize: 16,
     fontFamily: 'Poppins_700Bold',
     color: '#FFFFFF',
+  },
+  joinEventButtonTextDisabled: {
+    color: '#999999',
   },
   progressCard: {
     backgroundColor: colors.backgroundAlt,
