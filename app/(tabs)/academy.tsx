@@ -91,35 +91,60 @@ export default function AcademyScreen() {
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    console.log('[Academy] Component mounted');
     fetchCurrentUser();
   }, []);
 
   useEffect(() => {
     if (currentUserId) {
+      console.log('[Academy] Current user ID set:', currentUserId);
       fetchAcademyData();
     }
   }, [creator, currentUserId]);
 
   const fetchCurrentUser = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setCurrentUserId(user.id);
+      console.log('[Academy] Fetching current user...');
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError) {
+        console.error('[Academy] Error fetching user:', userError);
+        setError(`Auth error: ${userError.message}`);
+        setLoading(false);
+        return;
       }
-    } catch (error) {
-      console.error('Error fetching current user:', error);
+      
+      if (user) {
+        console.log('[Academy] User found:', user.id);
+        setCurrentUserId(user.id);
+      } else {
+        console.error('[Academy] No user found');
+        setError('No authenticated user found');
+        setLoading(false);
+      }
+    } catch (error: any) {
+      console.error('[Academy] Error fetching current user:', error);
+      setError(`Unexpected error: ${error.message}`);
+      setLoading(false);
     }
   };
 
   const fetchAcademyData = async () => {
-    if (!creator || !currentUserId) return;
+    if (!currentUserId) {
+      console.log('[Academy] No current user ID, skipping data fetch');
+      return;
+    }
 
     try {
+      console.log('[Academy] Starting data fetch for user:', currentUserId);
       setLoading(true);
+      setError(null);
 
       // Fetch next live training session
+      console.log('[Academy] Fetching live training sessions...');
       const { data: trainingData, error: trainingError } = await supabase
         .from('live_training_sessions')
         .select('*')
@@ -127,14 +152,19 @@ export default function AcademyScreen() {
         .eq('status', 'scheduled')
         .order('scheduled_date', { ascending: true })
         .limit(1)
-        .single();
+        .maybeSingle();
 
-      if (trainingError && trainingError.code !== 'PGRST116') {
-        console.error('Error fetching training:', trainingError);
+      if (trainingError) {
+        console.error('[Academy] Error fetching training:', trainingError);
+        if (trainingError.code !== 'PGRST116') {
+          setError(`Training fetch error: ${trainingError.message}`);
+        }
       } else if (trainingData) {
+        console.log('[Academy] Training session found:', trainingData.id);
         setNextTraining(trainingData);
 
         // Check if user is registered
+        console.log('[Academy] Checking registration status...');
         const { data: regData, error: regError } = await supabase
           .from('training_registrations')
           .select('*')
@@ -142,14 +172,21 @@ export default function AcademyScreen() {
           .eq('user_id', currentUserId)
           .maybeSingle();
 
-        if (regError && regError.code !== 'PGRST116') {
-          console.error('Error fetching registration:', regError);
+        if (regError) {
+          console.error('[Academy] Error fetching registration:', regError);
+          if (regError.code !== 'PGRST116') {
+            setError(`Registration fetch error: ${regError.message}`);
+          }
         } else {
+          console.log('[Academy] Registration status:', regData ? 'Registered' : 'Not registered');
           setRegistration(regData);
         }
+      } else {
+        console.log('[Academy] No upcoming training sessions found');
       }
 
       // Fetch course content items with videos and quizzes
+      console.log('[Academy] Fetching course content...');
       const { data: contentData, error: contentError } = await supabase
         .from('course_content_items')
         .select(`
@@ -159,7 +196,13 @@ export default function AcademyScreen() {
         `)
         .order('order_index', { ascending: true });
 
-      if (contentError) throw contentError;
+      if (contentError) {
+        console.error('[Academy] Error fetching content:', contentError);
+        setError(`Content fetch error: ${contentError.message}`);
+        throw contentError;
+      }
+
+      console.log('[Academy] Content items fetched:', contentData?.length || 0);
 
       // Transform data to include video/quiz in the correct structure
       const transformedContent = contentData?.map((item: any) => ({
@@ -173,26 +216,38 @@ export default function AcademyScreen() {
       setContentItems(transformedContent);
 
       // Fetch video progress
+      console.log('[Academy] Fetching video progress...');
       const { data: progressData, error: progressError } = await supabase
         .from('user_video_progress')
         .select('*')
         .eq('user_id', currentUserId);
 
-      if (progressError && progressError.code !== 'PGRST116') {
-        console.error('Error fetching video progress:', progressError);
+      if (progressError) {
+        console.error('[Academy] Error fetching video progress:', progressError);
+        if (progressError.code !== 'PGRST116') {
+          setError(`Progress fetch error: ${progressError.message}`);
+        }
+      } else {
+        console.log('[Academy] Video progress fetched:', progressData?.length || 0);
       }
 
       setVideoProgress(progressData || []);
 
       // Fetch quiz attempts
+      console.log('[Academy] Fetching quiz attempts...');
       const { data: quizData, error: quizError } = await supabase
         .from('user_quiz_attempts')
         .select('*')
         .eq('user_id', currentUserId)
         .order('created_at', { ascending: false });
 
-      if (quizError && quizError.code !== 'PGRST116') {
-        console.error('Error fetching quiz attempts:', quizError);
+      if (quizError) {
+        console.error('[Academy] Error fetching quiz attempts:', quizError);
+        if (quizError.code !== 'PGRST116') {
+          setError(`Quiz fetch error: ${quizError.message}`);
+        }
+      } else {
+        console.log('[Academy] Quiz attempts fetched:', quizData?.length || 0);
       }
 
       // Get the latest attempt for each quiz
@@ -211,9 +266,10 @@ export default function AcademyScreen() {
       });
 
       setQuizAttempts(latestAttempts);
+      console.log('[Academy] Data fetch completed successfully');
     } catch (error: any) {
-      console.error('Error fetching academy data:', error);
-      Alert.alert('Error', 'Failed to load academy content');
+      console.error('[Academy] Error fetching academy data:', error);
+      setError(`Failed to load academy content: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -223,6 +279,7 @@ export default function AcademyScreen() {
     if (!nextTraining || !currentUserId || registering) return;
 
     try {
+      console.log('[Academy] Registering for training:', nextTraining.id);
       setRegistering(true);
 
       const { data, error } = await supabase
@@ -235,16 +292,17 @@ export default function AcademyScreen() {
         .single();
 
       if (error) {
-        console.error('Registration error:', error);
-        Alert.alert('Error', 'Failed to register for training. Please try again.');
+        console.error('[Academy] Registration error:', error);
+        Alert.alert('Error', `Failed to register: ${error.message}`);
         return;
       }
 
+      console.log('[Academy] Registration successful');
       setRegistration(data);
       Alert.alert('Success', 'You have been registered for the training!');
     } catch (error: any) {
-      console.error('Error registering:', error);
-      Alert.alert('Error', 'Failed to register for training. Please try again.');
+      console.error('[Academy] Error registering:', error);
+      Alert.alert('Error', `Failed to register: ${error.message}`);
     } finally {
       setRegistering(false);
     }
@@ -259,9 +317,10 @@ export default function AcademyScreen() {
     }
 
     try {
+      console.log('[Academy] Opening training link:', nextTraining.meeting_link);
       await Linking.openURL(nextTraining.meeting_link);
     } catch (error) {
-      console.error('Error opening link:', error);
+      console.error('[Academy] Error opening link:', error);
       Alert.alert('Error', 'Failed to open training link.');
     }
   };
@@ -343,6 +402,7 @@ export default function AcademyScreen() {
     }
 
     if (item.content_type === 'video' && item.video) {
+      console.log('[Academy] Opening video:', item.video.id);
       // Navigate to video player page
       router.push({
         pathname: '/(tabs)/video-player',
@@ -354,6 +414,7 @@ export default function AcademyScreen() {
         },
       });
     } else if (item.content_type === 'quiz' && item.quiz) {
+      console.log('[Academy] Opening quiz:', item.quiz.id);
       // Navigate to quiz (placeholder for now)
       Alert.alert('Quiz', `Starting quiz: ${item.quiz.title}\n\nQuiz would open here.`);
     }
@@ -381,6 +442,30 @@ export default function AcademyScreen() {
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading academy...</Text>
+          {error && (
+            <Text style={styles.errorText}>{error}</Text>
+          )}
+        </View>
+      </View>
+    );
+  }
+
+  if (error && !currentUserId) {
+    return (
+      <View style={styles.container}>
+        <Stack.Screen
+          options={{
+            title: 'Academy',
+            headerShown: true,
+            headerStyle: { backgroundColor: colors.background },
+            headerTintColor: colors.text,
+          }}
+        />
+        <View style={styles.centerContent}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={fetchCurrentUser}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -397,6 +482,12 @@ export default function AcademyScreen() {
         }}
       />
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        {error && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>{error}</Text>
+          </View>
+        )}
+
         {/* Next LIVE Training Card - Now First and More Prominent */}
         {nextTraining && (
           <View style={styles.liveTrainingCard}>
@@ -526,146 +617,152 @@ export default function AcademyScreen() {
 
         {/* Content List - Videos with Thumbnails */}
         <View style={styles.contentList}>
-          {contentItems.map((item, index) => {
-            const isUnlocked = isItemUnlocked(index);
-            const isCompleted = isItemCompleted(item);
+          {contentItems.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No content available yet</Text>
+            </View>
+          ) : (
+            contentItems.map((item, index) => {
+              const isUnlocked = isItemUnlocked(index);
+              const isCompleted = isItemCompleted(item);
 
-            return (
-              <TouchableOpacity
-                key={item.id}
-                style={[
-                  styles.contentCard,
-                  isCompleted && styles.contentCardCompleted,
-                  !isUnlocked && styles.contentCardLocked,
-                ]}
-                onPress={() => handleItemPress(item, index)}
-                disabled={!isUnlocked}
-                activeOpacity={0.7}
-              >
-                {/* Video Thumbnail */}
-                {item.content_type === 'video' && item.video && (
-                  <View style={styles.videoThumbnailContainer}>
-                    {item.video.thumbnail_url ? (
-                      <Image
-                        source={{ uri: item.video.thumbnail_url }}
-                        style={styles.videoThumbnailImage}
-                      />
-                    ) : (
-                      <View style={styles.videoThumbnailPlaceholder}>
-                        <IconSymbol
-                          ios_icon_name="play.circle.fill"
-                          android_material_icon_name="play-circle"
-                          size={40}
-                          color={isUnlocked ? colors.primary : '#707070'}
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[
+                    styles.contentCard,
+                    isCompleted && styles.contentCardCompleted,
+                    !isUnlocked && styles.contentCardLocked,
+                  ]}
+                  onPress={() => handleItemPress(item, index)}
+                  disabled={!isUnlocked}
+                  activeOpacity={0.7}
+                >
+                  {/* Video Thumbnail */}
+                  {item.content_type === 'video' && item.video && (
+                    <View style={styles.videoThumbnailContainer}>
+                      {item.video.thumbnail_url ? (
+                        <Image
+                          source={{ uri: item.video.thumbnail_url }}
+                          style={styles.videoThumbnailImage}
                         />
-                      </View>
-                    )}
-                    {!isUnlocked && (
-                      <View style={styles.lockedOverlay}>
-                        <IconSymbol
-                          ios_icon_name="lock.fill"
-                          android_material_icon_name="lock"
-                          size={24}
-                          color="#FFFFFF"
-                        />
-                      </View>
-                    )}
-                    {isCompleted && (
-                      <View style={styles.completedBadge}>
+                      ) : (
+                        <View style={styles.videoThumbnailPlaceholder}>
+                          <IconSymbol
+                            ios_icon_name="play.circle.fill"
+                            android_material_icon_name="play-circle"
+                            size={40}
+                            color={isUnlocked ? colors.primary : '#707070'}
+                          />
+                        </View>
+                      )}
+                      {!isUnlocked && (
+                        <View style={styles.lockedOverlay}>
+                          <IconSymbol
+                            ios_icon_name="lock.fill"
+                            android_material_icon_name="lock"
+                            size={24}
+                            color="#FFFFFF"
+                          />
+                        </View>
+                      )}
+                      {isCompleted && (
+                        <View style={styles.completedBadge}>
+                          <IconSymbol
+                            ios_icon_name="checkmark.circle.fill"
+                            android_material_icon_name="check-circle"
+                            size={24}
+                            color={colors.success}
+                          />
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Quiz Icon */}
+                  {item.content_type === 'quiz' && (
+                    <View style={styles.contentIcon}>
+                      {isCompleted ? (
                         <IconSymbol
                           ios_icon_name="checkmark.circle.fill"
                           android_material_icon_name="check-circle"
-                          size={24}
+                          size={40}
                           color={colors.success}
                         />
-                      </View>
+                      ) : !isUnlocked ? (
+                        <IconSymbol
+                          ios_icon_name="lock.fill"
+                          android_material_icon_name="lock"
+                          size={32}
+                          color="#707070"
+                        />
+                      ) : (
+                        <IconSymbol
+                          ios_icon_name="doc.text.fill"
+                          android_material_icon_name="quiz"
+                          size={40}
+                          color={colors.primary}
+                        />
+                      )}
+                    </View>
+                  )}
+
+                  <View style={styles.contentInfo}>
+                    <View style={styles.contentHeader}>
+                      <Text style={[styles.contentTitle, !isUnlocked && styles.contentTitleLocked]}>
+                        {item.content_type === 'video'
+                          ? `${index + 1}. ${item.video?.title}`
+                          : item.quiz?.title}
+                      </Text>
+                      {item.content_type === 'quiz' && item.quiz?.is_required && (
+                        <View style={styles.requiredBadge}>
+                          <Text style={styles.requiredBadgeText}>REQUIRED</Text>
+                        </View>
+                      )}
+                    </View>
+                    {item.content_type === 'video' && item.video?.description && (
+                      <Text
+                        style={[
+                          styles.contentDescription,
+                          !isUnlocked && styles.contentDescriptionLocked,
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {item.video.description}
+                      </Text>
+                    )}
+                    {item.content_type === 'video' && item.video?.duration_seconds && (
+                      <Text style={styles.videoDuration}>
+                        {Math.floor(item.video.duration_seconds / 60)} min
+                      </Text>
+                    )}
+                    {item.content_type === 'quiz' && item.quiz?.description && (
+                      <Text
+                        style={[
+                          styles.contentDescription,
+                          !isUnlocked && styles.contentDescriptionLocked,
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {item.quiz.description}
+                      </Text>
                     )}
                   </View>
-                )}
 
-                {/* Quiz Icon */}
-                {item.content_type === 'quiz' && (
-                  <View style={styles.contentIcon}>
-                    {isCompleted ? (
+                  {isUnlocked && !isCompleted && (
+                    <View style={styles.contentArrow}>
                       <IconSymbol
-                        ios_icon_name="checkmark.circle.fill"
-                        android_material_icon_name="check-circle"
-                        size={40}
-                        color={colors.success}
+                        ios_icon_name="chevron.right"
+                        android_material_icon_name="chevron-right"
+                        size={20}
+                        color="#A0A0A0"
                       />
-                    ) : !isUnlocked ? (
-                      <IconSymbol
-                        ios_icon_name="lock.fill"
-                        android_material_icon_name="lock"
-                        size={32}
-                        color="#707070"
-                      />
-                    ) : (
-                      <IconSymbol
-                        ios_icon_name="doc.text.fill"
-                        android_material_icon_name="quiz"
-                        size={40}
-                        color={colors.primary}
-                      />
-                    )}
-                  </View>
-                )}
-
-                <View style={styles.contentInfo}>
-                  <View style={styles.contentHeader}>
-                    <Text style={[styles.contentTitle, !isUnlocked && styles.contentTitleLocked]}>
-                      {item.content_type === 'video'
-                        ? `${index + 1}. ${item.video?.title}`
-                        : item.quiz?.title}
-                    </Text>
-                    {item.content_type === 'quiz' && item.quiz?.is_required && (
-                      <View style={styles.requiredBadge}>
-                        <Text style={styles.requiredBadgeText}>REQUIRED</Text>
-                      </View>
-                    )}
-                  </View>
-                  {item.content_type === 'video' && item.video?.description && (
-                    <Text
-                      style={[
-                        styles.contentDescription,
-                        !isUnlocked && styles.contentDescriptionLocked,
-                      ]}
-                      numberOfLines={2}
-                    >
-                      {item.video.description}
-                    </Text>
+                    </View>
                   )}
-                  {item.content_type === 'video' && item.video?.duration_seconds && (
-                    <Text style={styles.videoDuration}>
-                      {Math.floor(item.video.duration_seconds / 60)} min
-                    </Text>
-                  )}
-                  {item.content_type === 'quiz' && item.quiz?.description && (
-                    <Text
-                      style={[
-                        styles.contentDescription,
-                        !isUnlocked && styles.contentDescriptionLocked,
-                      ]}
-                      numberOfLines={2}
-                    >
-                      {item.quiz.description}
-                    </Text>
-                  )}
-                </View>
-
-                {isUnlocked && !isCompleted && (
-                  <View style={styles.contentArrow}>
-                    <IconSymbol
-                      ios_icon_name="chevron.right"
-                      android_material_icon_name="chevron-right"
-                      size={20}
-                      color="#A0A0A0"
-                    />
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
+                </TouchableOpacity>
+              );
+            })
+          )}
         </View>
 
         {/* Info Card */}
@@ -694,6 +791,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   content: {
     padding: 20,
@@ -704,6 +802,49 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Poppins_500Medium',
     color: colors.textSecondary,
+  },
+  errorText: {
+    marginTop: 16,
+    fontSize: 14,
+    fontFamily: 'Poppins_500Medium',
+    color: colors.error,
+    textAlign: 'center',
+  },
+  errorBanner: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.error,
+  },
+  errorBannerText: {
+    fontSize: 14,
+    fontFamily: 'Poppins_500Medium',
+    color: colors.error,
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 16,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  retryButtonText: {
+    fontSize: 16,
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#FFFFFF',
+  },
+  emptyState: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontFamily: 'Poppins_500Medium',
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   liveTrainingCard: {
     backgroundColor: colors.backgroundAlt,
