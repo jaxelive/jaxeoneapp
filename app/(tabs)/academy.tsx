@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
 } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
@@ -55,6 +56,24 @@ interface QuizAttempt {
   score: number;
 }
 
+interface LiveTrainingSession {
+  id: string;
+  title: string;
+  description: string | null;
+  scheduled_date: string;
+  duration_minutes: number;
+  meeting_link: string | null;
+  status: string;
+}
+
+interface TrainingRegistration {
+  id: string;
+  training_session_id: string;
+  user_id: string;
+  registered_at: string;
+  attended: boolean;
+}
+
 export default function AcademyScreen() {
   const { creator } = useCreatorData();
   const [fontsLoaded] = useFonts({
@@ -67,17 +86,68 @@ export default function AcademyScreen() {
   const [contentItems, setContentItems] = useState<ContentItem[]>([]);
   const [videoProgress, setVideoProgress] = useState<VideoProgress[]>([]);
   const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
+  const [nextTraining, setNextTraining] = useState<LiveTrainingSession | null>(null);
+  const [registration, setRegistration] = useState<TrainingRegistration | null>(null);
   const [loading, setLoading] = useState(true);
+  const [registering, setRegistering] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchAcademyData();
-  }, [creator]);
+    fetchCurrentUser();
+  }, []);
+
+  useEffect(() => {
+    if (currentUserId) {
+      fetchAcademyData();
+    }
+  }, [creator, currentUserId]);
+
+  const fetchCurrentUser = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setCurrentUserId(user.id);
+      }
+    } catch (error) {
+      console.error('Error fetching current user:', error);
+    }
+  };
 
   const fetchAcademyData = async () => {
-    if (!creator) return;
+    if (!creator || !currentUserId) return;
 
     try {
       setLoading(true);
+
+      // Fetch next live training session
+      const { data: trainingData, error: trainingError } = await supabase
+        .from('live_training_sessions')
+        .select('*')
+        .gte('scheduled_date', new Date().toISOString())
+        .eq('status', 'scheduled')
+        .order('scheduled_date', { ascending: true })
+        .limit(1)
+        .single();
+
+      if (trainingError && trainingError.code !== 'PGRST116') {
+        console.error('Error fetching training:', trainingError);
+      } else if (trainingData) {
+        setNextTraining(trainingData);
+
+        // Check if user is registered
+        const { data: regData, error: regError } = await supabase
+          .from('training_registrations')
+          .select('*')
+          .eq('training_session_id', trainingData.id)
+          .eq('user_id', currentUserId)
+          .maybeSingle();
+
+        if (regError && regError.code !== 'PGRST116') {
+          console.error('Error fetching registration:', regError);
+        } else {
+          setRegistration(regData);
+        }
+      }
 
       // Fetch course content items with videos and quizzes
       const { data: contentData, error: contentError } = await supabase
@@ -106,7 +176,7 @@ export default function AcademyScreen() {
       const { data: progressData, error: progressError } = await supabase
         .from('user_video_progress')
         .select('*')
-        .eq('user_id', creator.id);
+        .eq('user_id', currentUserId);
 
       if (progressError && progressError.code !== 'PGRST116') {
         console.error('Error fetching video progress:', progressError);
@@ -118,7 +188,7 @@ export default function AcademyScreen() {
       const { data: quizData, error: quizError } = await supabase
         .from('user_quiz_attempts')
         .select('*')
-        .eq('user_id', creator.id)
+        .eq('user_id', currentUserId)
         .order('created_at', { ascending: false });
 
       if (quizError && quizError.code !== 'PGRST116') {
@@ -147,6 +217,88 @@ export default function AcademyScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRegister = async () => {
+    if (!nextTraining || !currentUserId || registering) return;
+
+    try {
+      setRegistering(true);
+
+      const { data, error } = await supabase
+        .from('training_registrations')
+        .insert({
+          training_session_id: nextTraining.id,
+          user_id: currentUserId,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Registration error:', error);
+        Alert.alert('Error', 'Failed to register for training. Please try again.');
+        return;
+      }
+
+      setRegistration(data);
+      Alert.alert('Success', 'You have been registered for the training!');
+    } catch (error: any) {
+      console.error('Error registering:', error);
+      Alert.alert('Error', 'Failed to register for training. Please try again.');
+    } finally {
+      setRegistering(false);
+    }
+  };
+
+  const handleJoinTraining = async () => {
+    if (!nextTraining || !registration) return;
+
+    if (!nextTraining.meeting_link) {
+      Alert.alert('Error', 'Meeting link not available yet.');
+      return;
+    }
+
+    try {
+      await Linking.openURL(nextTraining.meeting_link);
+    } catch (error) {
+      console.error('Error opening link:', error);
+      Alert.alert('Error', 'Failed to open training link.');
+    }
+  };
+
+  const isTrainingToday = useCallback(() => {
+    if (!nextTraining) return false;
+
+    const trainingDate = new Date(nextTraining.scheduled_date);
+    const today = new Date();
+
+    return (
+      trainingDate.getFullYear() === today.getFullYear() &&
+      trainingDate.getMonth() === today.getMonth() &&
+      trainingDate.getDate() === today.getDate()
+    );
+  }, [nextTraining]);
+
+  const canJoinTraining = useCallback(() => {
+    return registration && isTrainingToday();
+  }, [registration, isTrainingToday]);
+
+  const formatTrainingDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
+  const formatTrainingTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    });
   };
 
   const isItemUnlocked = (index: number): boolean => {
@@ -245,47 +397,101 @@ export default function AcademyScreen() {
         }}
       />
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        {/* Header Card */}
-        <View style={styles.headerCard}>
-          <Text style={styles.headerTitle}>Welcome New Creators</Text>
-          <Text style={styles.headerSubtitle}>
-            Master your creator journey with our comprehensive training
-          </Text>
-        </View>
+        {/* Next LIVE Training Card - Now First and More Prominent */}
+        {nextTraining && (
+          <View style={styles.liveTrainingCard}>
+            <View style={styles.liveTrainingHeader}>
+              <Text style={styles.liveTrainingTitle}>Next LIVE Training</Text>
+              <View style={styles.liveBadge}>
+                <Text style={styles.liveBadgeText}>LIVE</Text>
+              </View>
+            </View>
+            <Text style={styles.liveTrainingName}>{nextTraining.title}</Text>
+            {nextTraining.description && (
+              <Text style={styles.liveTrainingDescription}>{nextTraining.description}</Text>
+            )}
+            <View style={styles.liveTrainingDetails}>
+              <View style={styles.liveTrainingDetailItem}>
+                <IconSymbol
+                  ios_icon_name="calendar"
+                  android_material_icon_name="calendar-today"
+                  size={16}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.liveTrainingDetailText}>
+                  {formatTrainingDate(nextTraining.scheduled_date)}
+                </Text>
+              </View>
+              <View style={styles.liveTrainingDetailItem}>
+                <IconSymbol
+                  ios_icon_name="clock"
+                  android_material_icon_name="access-time"
+                  size={16}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.liveTrainingDetailText}>
+                  {formatTrainingTime(nextTraining.scheduled_date)}
+                </Text>
+              </View>
+            </View>
 
-        {/* Next LIVE Training Card */}
-        <View style={styles.liveTrainingCard}>
-          <View style={styles.liveTrainingHeader}>
-            <Text style={styles.liveTrainingTitle}>Next LIVE Training</Text>
-            <View style={styles.liveBadge}>
-              <Text style={styles.liveBadgeText}>LIVE</Text>
+            {/* Registration and Join Buttons */}
+            <View style={styles.trainingActions}>
+              {!registration ? (
+                <TouchableOpacity
+                  style={[styles.registerButton, registering && styles.registerButtonDisabled]}
+                  onPress={handleRegister}
+                  disabled={registering}
+                  activeOpacity={0.7}
+                >
+                  {registering ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.registerButtonText}>Register</Text>
+                  )}
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.registeredButton}>
+                  <IconSymbol
+                    ios_icon_name="checkmark.circle.fill"
+                    android_material_icon_name="check-circle"
+                    size={20}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.registeredButtonText}>Registered</Text>
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={[
+                  styles.joinButton,
+                  !canJoinTraining() && styles.joinButtonDisabled,
+                ]}
+                onPress={handleJoinTraining}
+                disabled={!canJoinTraining()}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.joinButtonText,
+                    !canJoinTraining() && styles.joinButtonTextDisabled,
+                  ]}
+                >
+                  Join Training
+                </Text>
+              </TouchableOpacity>
             </View>
+
+            {!registration && (
+              <Text style={styles.trainingHint}>Register to join the training</Text>
+            )}
+            {registration && !isTrainingToday() && (
+              <Text style={styles.trainingHint}>
+                Join button will be enabled on the day of training
+              </Text>
+            )}
           </View>
-          <Text style={styles.liveTrainingName}>Welcome New Creators</Text>
-          <View style={styles.liveTrainingDetails}>
-            <View style={styles.liveTrainingDetailItem}>
-              <IconSymbol
-                ios_icon_name="calendar"
-                android_material_icon_name="calendar-today"
-                size={16}
-                color={colors.textSecondary}
-              />
-              <Text style={styles.liveTrainingDetailText}>December 20, 2024</Text>
-            </View>
-            <View style={styles.liveTrainingDetailItem}>
-              <IconSymbol
-                ios_icon_name="clock"
-                android_material_icon_name="access-time"
-                size={16}
-                color={colors.textSecondary}
-              />
-              <Text style={styles.liveTrainingDetailText}>3:00 PM EST</Text>
-            </View>
-          </View>
-          <TouchableOpacity style={styles.joinTrainingButton}>
-            <Text style={styles.joinTrainingButtonText}>Join Training</Text>
-          </TouchableOpacity>
-        </View>
+        )}
 
         {/* Progress Card */}
         <View style={styles.progressCard}>
@@ -499,33 +705,18 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_500Medium',
     color: colors.textSecondary,
   },
-  headerCard: {
-    backgroundColor: colors.backgroundAlt,
-    borderRadius: 28,
-    padding: 32,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontFamily: 'Poppins_700Bold',
-    color: colors.text,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  headerSubtitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins_500Medium',
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
   liveTrainingCard: {
     backgroundColor: colors.backgroundAlt,
     borderRadius: 24,
     padding: 24,
     marginBottom: 24,
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
   liveTrainingHeader: {
     flexDirection: 'row',
@@ -538,6 +729,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_600SemiBold',
     color: colors.textSecondary,
     letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   liveBadge: {
     backgroundColor: colors.error,
@@ -552,10 +744,17 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   liveTrainingName: {
-    fontSize: 22,
+    fontSize: 24,
     fontFamily: 'Poppins_700Bold',
     color: colors.text,
+    marginBottom: 8,
+  },
+  liveTrainingDescription: {
+    fontSize: 15,
+    fontFamily: 'Poppins_400Regular',
+    color: colors.textSecondary,
     marginBottom: 16,
+    lineHeight: 22,
   },
   liveTrainingDetails: {
     gap: 12,
@@ -571,16 +770,71 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_500Medium',
     color: colors.text,
   },
-  joinTrainingButton: {
+  trainingActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  registerButton: {
+    flex: 1,
     backgroundColor: colors.primary,
     borderRadius: 16,
     padding: 16,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
   },
-  joinTrainingButtonText: {
+  registerButtonDisabled: {
+    opacity: 0.6,
+  },
+  registerButtonText: {
     fontSize: 16,
     fontFamily: 'Poppins_700Bold',
     color: '#FFFFFF',
+  },
+  registeredButton: {
+    flex: 1,
+    backgroundColor: colors.success,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    minHeight: 52,
+  },
+  registeredButtonText: {
+    fontSize: 16,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
+  },
+  joinButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
+  },
+  joinButtonDisabled: {
+    backgroundColor: colors.grey,
+    opacity: 0.5,
+  },
+  joinButtonText: {
+    fontSize: 16,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
+  },
+  joinButtonTextDisabled: {
+    color: colors.textSecondary,
+  },
+  trainingHint: {
+    fontSize: 13,
+    fontFamily: 'Poppins_500Medium',
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 12,
+    fontStyle: 'italic',
   },
   progressCard: {
     backgroundColor: colors.backgroundAlt,
