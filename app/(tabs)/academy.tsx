@@ -15,6 +15,7 @@ import {
 import { Stack, router } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/app/integrations/supabase/client';
+import { useSupabase } from '@/contexts/SupabaseContext';
 import { useCreatorData } from '@/hooks/useCreatorData';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
@@ -76,6 +77,7 @@ interface TrainingRegistration {
 }
 
 export default function AcademyScreen() {
+  const { user, session, loading: authLoading } = useSupabase();
   const { creator } = useCreatorData();
   const [fontsLoaded] = useFonts({
     Poppins_400Regular,
@@ -92,56 +94,36 @@ export default function AcademyScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [registering, setRegistering] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     console.log('[Academy] Component mounted');
-    fetchCurrentUser();
+    console.log('[Academy] Auth loading:', authLoading);
+    console.log('[Academy] User:', user?.id);
+    console.log('[Academy] Session:', session ? 'Active' : 'None');
   }, []);
 
   useEffect(() => {
-    if (currentUserId) {
-      console.log('[Academy] Current user ID set:', currentUserId);
-      fetchAcademyData();
-    }
-  }, [creator, currentUserId]);
-
-  const fetchCurrentUser = async () => {
-    try {
-      console.log('[Academy] Fetching current user...');
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
-      if (userError) {
-        console.error('[Academy] Error fetching user:', userError);
-        setError(`Auth error: ${userError.message}`);
-        setLoading(false);
-        return;
-      }
-      
+    if (!authLoading) {
       if (user) {
-        console.log('[Academy] User found:', user.id);
-        setCurrentUserId(user.id);
+        console.log('[Academy] User authenticated, fetching data for:', user.id);
+        fetchAcademyData();
       } else {
-        console.error('[Academy] No user found');
-        setError('No authenticated user found');
+        console.log('[Academy] No authenticated user');
+        setError('Please log in to access the Academy');
         setLoading(false);
       }
-    } catch (error: any) {
-      console.error('[Academy] Error fetching current user:', error);
-      setError(`Unexpected error: ${error.message}`);
-      setLoading(false);
     }
-  };
+  }, [user, authLoading]);
 
   const fetchAcademyData = async () => {
-    if (!currentUserId) {
-      console.log('[Academy] No current user ID, skipping data fetch');
+    if (!user) {
+      console.log('[Academy] No user, skipping data fetch');
       return;
     }
 
     try {
-      console.log('[Academy] Starting data fetch for user:', currentUserId);
+      console.log('[Academy] Starting data fetch for user:', user.id);
       setLoading(true);
       setError(null);
 
@@ -178,7 +160,7 @@ export default function AcademyScreen() {
           .from('training_registrations')
           .select('*')
           .eq('training_session_id', trainingData.id)
-          .eq('user_id', currentUserId)
+          .eq('user_id', user.id)
           .maybeSingle();
 
         if (regError) {
@@ -230,7 +212,7 @@ export default function AcademyScreen() {
       const { data: progressData, error: progressError } = await supabase
         .from('user_video_progress')
         .select('*')
-        .eq('user_id', currentUserId);
+        .eq('user_id', user.id);
 
       if (progressError) {
         console.error('[Academy] Error fetching video progress:', progressError);
@@ -248,7 +230,7 @@ export default function AcademyScreen() {
       const { data: quizData, error: quizError } = await supabase
         .from('user_quiz_attempts')
         .select('*')
-        .eq('user_id', currentUserId)
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (quizError) {
@@ -290,10 +272,10 @@ export default function AcademyScreen() {
     console.log('[Academy] Manual refresh triggered');
     setRefreshing(true);
     fetchAcademyData();
-  }, [currentUserId]);
+  }, [user]);
 
   const handleRegister = async () => {
-    if (!nextTraining || !currentUserId || registering) return;
+    if (!nextTraining || !user || registering) return;
 
     try {
       console.log('[Academy] Registering for training:', nextTraining.id);
@@ -303,7 +285,7 @@ export default function AcademyScreen() {
         .from('training_registrations')
         .insert({
           training_session_id: nextTraining.id,
-          user_id: currentUserId,
+          user_id: user.id,
         })
         .select()
         .single();
@@ -459,7 +441,7 @@ export default function AcademyScreen() {
     (item) => item.content_type === 'quiz' && isItemCompleted(item)
   );
 
-  if (loading || !fontsLoaded) {
+  if (authLoading || loading || !fontsLoaded) {
     return (
       <View style={styles.container}>
         <Stack.Screen
@@ -481,7 +463,7 @@ export default function AcademyScreen() {
     );
   }
 
-  if (error && !currentUserId) {
+  if (!user) {
     return (
       <View style={styles.container}>
         <Stack.Screen
@@ -493,9 +475,12 @@ export default function AcademyScreen() {
           }}
         />
         <View style={styles.centerContent}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={fetchCurrentUser}>
-            <Text style={styles.retryButtonText}>Retry</Text>
+          <Text style={styles.errorText}>Please log in to access the Academy</Text>
+          <TouchableOpacity 
+            style={styles.retryButton} 
+            onPress={() => router.push('/login')}
+          >
+            <Text style={styles.retryButtonText}>Go to Login</Text>
           </TouchableOpacity>
         </View>
       </View>
