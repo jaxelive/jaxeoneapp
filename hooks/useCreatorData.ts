@@ -11,6 +11,7 @@ export interface ManagerData {
   username: string | null;
   whatsapp: string | null;
   role: string;
+  manager_avatar_url: string | null;
 }
 
 export interface CreatorData {
@@ -71,6 +72,7 @@ export function useCreatorData(creatorHandle: string = 'avelezsanti') {
           managers:assigned_manager_id (
             id,
             whatsapp,
+            avatar_url,
             users:user_id (
               id,
               first_name,
@@ -121,7 +123,14 @@ export function useCreatorData(creatorHandle: string = 'avelezsanti') {
             username: managerUser.username,
             whatsapp: creatorData.managers.whatsapp,
             role: managerUser.role,
+            manager_avatar_url: creatorData.managers.avatar_url,
           };
+          
+          console.log('[useCreatorData] Manager data loaded:', {
+            name: `${managerData.first_name} ${managerData.last_name}`,
+            userAvatarUrl: managerData.avatar_url,
+            managerAvatarUrl: managerData.manager_avatar_url,
+          });
         }
 
         const transformedCreator: CreatorData = {

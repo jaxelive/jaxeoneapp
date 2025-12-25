@@ -589,9 +589,9 @@ export default function HomeScreen() {
     ? (challengeProgress.completedDays / challengeProgress.totalDays) * 100 
     : 0;
 
-  // Manager data
+  // Manager data - Use manager_avatar_url from managers table first, fallback to avatar_url from users table
   const manager = creator.manager;
-  const managerProfileUrl = manager?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop';
+  const managerProfileUrl = manager?.manager_avatar_url || manager?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop';
 
   return (
     <>
