@@ -17,6 +17,7 @@ import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/app/integrations/supabase/client';
 import { useCreatorData } from '@/hooks/useCreatorData';
 import { IconSymbol } from '@/components/IconSymbol';
+import { formatTo12Hour } from '@/utils/timeFormat';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 
 interface CourseVideo {
@@ -136,7 +137,7 @@ export default function AcademyScreen() {
         console.log('[Academy] Live events found:', eventsData?.length || 0);
         // Log each event with its hour for debugging
         eventsData?.forEach((event) => {
-          console.log(`[Academy] Event: ${event.event_name} - Date: ${event.event_date} - Hour: ${event.event_hour}`);
+          console.log(`[Academy] Event: ${event.event_name} - Date: ${event.event_date} - Hour: ${event.event_hour} - Formatted: ${formatTo12Hour(event.event_hour)}`);
         });
         setLiveEvents(eventsData || []);
       }
@@ -175,6 +176,8 @@ export default function AcademyScreen() {
       const coursesWithContent: Course[] = [];
       
       for (const course of coursesData || []) {
+        console.log(`[Academy] Course: ${course.title} - Cover Image: ${course.cover_image_url || 'None'}`);
+        
         const { data: contentData, error: contentError } = await supabase
           .from('course_content_items')
           .select(`
@@ -498,7 +501,7 @@ export default function AcademyScreen() {
                         color={colors.textSecondary}
                       />
                       <Text style={styles.liveEventDetailText}>
-                        {event.event_hour}
+                        {formatTo12Hour(event.event_hour)}
                       </Text>
                     </View>
                     {event.language && (
@@ -584,26 +587,36 @@ export default function AcademyScreen() {
 
               return (
                 <View key={course.id} style={styles.courseContainer}>
-                  {/* Course Header - Clickable */}
+                  {/* Course Header with Thumbnail - Clickable */}
                   <TouchableOpacity
                     style={styles.courseHeader}
                     onPress={() => toggleCourse(course.id)}
                     activeOpacity={0.7}
                   >
-                    <View style={styles.courseHeaderLeft}>
-                      <IconSymbol
-                        ios_icon_name="book.fill"
-                        android_material_icon_name="book"
-                        size={24}
-                        color={colors.primary}
+                    {/* Course Thumbnail */}
+                    {course.cover_image_url ? (
+                      <Image
+                        source={{ uri: course.cover_image_url }}
+                        style={styles.courseThumbnail}
                       />
-                      <View style={styles.courseHeaderText}>
-                        <Text style={styles.courseTitle}>{course.title}</Text>
-                        <Text style={styles.courseProgress}>
-                          {progress.completed} / {progress.total} completed
-                        </Text>
+                    ) : (
+                      <View style={styles.courseThumbnailPlaceholder}>
+                        <IconSymbol
+                          ios_icon_name="book.fill"
+                          android_material_icon_name="book"
+                          size={32}
+                          color={colors.primary}
+                        />
                       </View>
+                    )}
+                    
+                    <View style={styles.courseHeaderText}>
+                      <Text style={styles.courseTitle}>{course.title}</Text>
+                      <Text style={styles.courseProgress}>
+                        {progress.completed} / {progress.total} completed
+                      </Text>
                     </View>
+                    
                     <IconSymbol
                       ios_icon_name={isExpanded ? "chevron.up" : "chevron.down"}
                       android_material_icon_name={isExpanded ? "expand-less" : "expand-more"}
@@ -995,15 +1008,22 @@ const styles = StyleSheet.create({
   },
   courseHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
-  },
-  courseHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 12,
-    flex: 1,
+  },
+  courseThumbnail: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+  },
+  courseThumbnailPlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    backgroundColor: colors.grey,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   courseHeaderText: {
     flex: 1,

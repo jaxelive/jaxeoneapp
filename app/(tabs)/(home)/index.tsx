@@ -24,6 +24,7 @@ import { RotatingCard } from "@/components/RotatingCard";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { AnimatedProgressBar } from "@/components/AnimatedProgressBar";
 import { ChatDrawer } from "@/components/ChatDrawer";
+import { formatTo12Hour } from "@/utils/timeFormat";
 
 const { width } = Dimensions.get('window');
 
@@ -819,7 +820,7 @@ export default function HomeScreen() {
                         </Text>
                         <Text style={styles.compactEventDivider}>•</Text>
                         <Text style={styles.compactEventTimeText}>
-                          {featuredLiveEvent.event_hour}
+                          {formatTo12Hour(featuredLiveEvent.event_hour)}
                         </Text>
                       </View>
                     </View>
