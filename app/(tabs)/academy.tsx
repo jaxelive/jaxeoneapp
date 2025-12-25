@@ -57,22 +57,15 @@ interface QuizAttempt {
   score: number;
 }
 
-interface LiveTrainingSession {
+interface LiveEvent {
   id: string;
-  title: string;
-  description: string | null;
-  scheduled_date: string;
-  duration_minutes: number;
-  meeting_link: string | null;
-  status: string;
-}
-
-interface TrainingRegistration {
-  id: string;
-  training_session_id: string;
-  creator_handle: string;
-  registered_at: string;
-  attended: boolean;
+  event_name: string;
+  language: string;
+  event_info: string;
+  event_link: string;
+  event_date: string;
+  event_hour: string;
+  region: string | null;
 }
 
 // Hardcoded creator handle - no authentication needed
@@ -90,11 +83,9 @@ export default function AcademyScreen() {
   const [contentItems, setContentItems] = useState<ContentItem[]>([]);
   const [videoProgress, setVideoProgress] = useState<VideoProgress[]>([]);
   const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
-  const [nextTraining, setNextTraining] = useState<LiveTrainingSession | null>(null);
-  const [registration, setRegistration] = useState<TrainingRegistration | null>(null);
+  const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [registering, setRegistering] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -108,54 +99,26 @@ export default function AcademyScreen() {
       setLoading(true);
       setError(null);
 
-      const now = new Date().toISOString();
-      console.log('[Academy] Current time:', now);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayString = today.toISOString().split('T')[0];
+      console.log('[Academy] Today\'s date:', todayString);
 
-      // Fetch next live training session
-      console.log('[Academy] Fetching live training sessions...');
-      const { data: trainingData, error: trainingError } = await supabase
-        .from('live_training_sessions')
+      // Fetch upcoming live events from live_events table
+      console.log('[Academy] Fetching live events...');
+      const { data: eventsData, error: eventsError } = await supabase
+        .from('live_events')
         .select('*')
-        .gte('scheduled_date', now)
-        .eq('status', 'scheduled')
-        .order('scheduled_date', { ascending: true })
-        .limit(1)
-        .maybeSingle();
+        .gte('event_date', todayString)
+        .order('event_date', { ascending: true })
+        .order('event_hour', { ascending: true });
 
-      if (trainingError) {
-        console.error('[Academy] Error fetching training:', trainingError);
-        if (trainingError.code !== 'PGRST116') {
-          setError(`Training fetch error: ${trainingError.message}`);
-        }
-      } else if (trainingData) {
-        console.log('[Academy] Training session found:', {
-          id: trainingData.id,
-          title: trainingData.title,
-          scheduled_date: trainingData.scheduled_date,
-        });
-        setNextTraining(trainingData);
-
-        // Check if creator is registered
-        console.log('[Academy] Checking registration status...');
-        const { data: regData, error: regError } = await supabase
-          .from('training_registrations')
-          .select('*')
-          .eq('training_session_id', trainingData.id)
-          .eq('creator_handle', CREATOR_HANDLE)
-          .maybeSingle();
-
-        if (regError) {
-          console.error('[Academy] Error fetching registration:', regError);
-          if (regError.code !== 'PGRST116') {
-            setError(`Registration fetch error: ${regError.message}`);
-          }
-        } else {
-          console.log('[Academy] Registration status:', regData ? 'Registered' : 'Not registered');
-          setRegistration(regData);
-        }
+      if (eventsError) {
+        console.error('[Academy] Error fetching events:', eventsError);
+        setError(`Events fetch error: ${eventsError.message}`);
       } else {
-        console.log('[Academy] No upcoming training sessions found');
-        setNextTraining(null);
+        console.log('[Academy] Live events found:', eventsData?.length || 0);
+        setLiveEvents(eventsData || []);
       }
 
       // Fetch course content items with videos and quizzes
@@ -255,102 +218,27 @@ export default function AcademyScreen() {
     fetchAcademyData();
   }, []);
 
-  const handleRegister = async () => {
-    if (!nextTraining || registering) return;
-
-    try {
-      console.log('[Academy] Registering for training:', nextTraining.id);
-      setRegistering(true);
-
-      const { data, error } = await supabase
-        .from('training_registrations')
-        .insert({
-          training_session_id: nextTraining.id,
-          creator_handle: CREATOR_HANDLE,
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('[Academy] Registration error:', error);
-        Alert.alert('Error', `Failed to register: ${error.message}`);
-        return;
-      }
-
-      console.log('[Academy] Registration successful');
-      setRegistration(data);
-      Alert.alert('Success', 'You have been registered for the training!');
-    } catch (error: any) {
-      console.error('[Academy] Error registering:', error);
-      Alert.alert('Error', `Failed to register: ${error.message}`);
-    } finally {
-      setRegistering(false);
-    }
-  };
-
-  const handleJoinTraining = async () => {
-    if (!nextTraining || !registration) return;
-
-    if (!nextTraining.meeting_link) {
-      Alert.alert('Error', 'Meeting link not available yet.');
+  const handleJoinEvent = async (event: LiveEvent) => {
+    if (!event.event_link) {
+      Alert.alert('Error', 'Event link not available yet.');
       return;
     }
 
     try {
-      console.log('[Academy] Opening training link:', nextTraining.meeting_link);
-      await Linking.openURL(nextTraining.meeting_link);
+      console.log('[Academy] Opening event link:', event.event_link);
+      await Linking.openURL(event.event_link);
     } catch (error) {
       console.error('[Academy] Error opening link:', error);
-      Alert.alert('Error', 'Failed to open training link.');
+      Alert.alert('Error', 'Failed to open event link.');
     }
   };
 
-  const isTrainingToday = useCallback(() => {
-    if (!nextTraining) return false;
-
-    const trainingDate = new Date(nextTraining.scheduled_date);
-    const today = new Date();
-
-    const isSameDay = (
-      trainingDate.getFullYear() === today.getFullYear() &&
-      trainingDate.getMonth() === today.getMonth() &&
-      trainingDate.getDate() === today.getDate()
-    );
-
-    console.log('[Academy] isTrainingToday check:', {
-      trainingDate: trainingDate.toISOString(),
-      today: today.toISOString(),
-      isSameDay,
-    });
-
-    return isSameDay;
-  }, [nextTraining]);
-
-  const canJoinTraining = useCallback(() => {
-    const result = registration && isTrainingToday();
-    console.log('[Academy] canJoinTraining:', {
-      hasRegistration: !!registration,
-      isToday: isTrainingToday(),
-      canJoin: result,
-    });
-    return result;
-  }, [registration, isTrainingToday]);
-
-  const formatTrainingDate = (dateString: string) => {
+  const formatEventDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
       month: 'long',
       day: 'numeric',
       year: 'numeric',
-    });
-  };
-
-  const formatTrainingTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZoneName: 'short',
     });
   };
 
@@ -472,111 +360,95 @@ export default function AcademyScreen() {
           </View>
         )}
 
-        {/* Next LIVE Training Card - Now First and More Prominent */}
-        {nextTraining ? (
-          <View style={styles.liveTrainingCard}>
-            <View style={styles.liveTrainingHeader}>
-              <Text style={styles.liveTrainingTitle}>Next LIVE Training</Text>
-              <View style={styles.liveBadge}>
-                <Text style={styles.liveBadgeText}>LIVE</Text>
-              </View>
-            </View>
-            <Text style={styles.liveTrainingName}>{nextTraining.title}</Text>
-            {nextTraining.description && (
-              <Text style={styles.liveTrainingDescription}>{nextTraining.description}</Text>
-            )}
-            <View style={styles.liveTrainingDetails}>
-              <View style={styles.liveTrainingDetailItem}>
-                <IconSymbol
-                  ios_icon_name="calendar"
-                  android_material_icon_name="calendar-today"
-                  size={16}
-                  color={colors.textSecondary}
-                />
-                <Text style={styles.liveTrainingDetailText}>
-                  {formatTrainingDate(nextTraining.scheduled_date)}
-                </Text>
-              </View>
-              <View style={styles.liveTrainingDetailItem}>
-                <IconSymbol
-                  ios_icon_name="clock"
-                  android_material_icon_name="access-time"
-                  size={16}
-                  color={colors.textSecondary}
-                />
-                <Text style={styles.liveTrainingDetailText}>
-                  {formatTrainingTime(nextTraining.scheduled_date)}
-                </Text>
-              </View>
-            </View>
+        {/* Live Events Section */}
+        {liveEvents.length > 0 ? (
+          <View style={styles.liveEventsSection}>
+            <Text style={styles.sectionTitle}>Upcoming LIVE Events</Text>
+            {liveEvents.map((event) => (
+              <View key={event.id} style={styles.liveEventCard}>
+                <View style={styles.liveEventHeader}>
+                  <Text style={styles.liveEventName}>{event.event_name}</Text>
+                  <View style={styles.liveBadge}>
+                    <Text style={styles.liveBadgeText}>LIVE</Text>
+                  </View>
+                </View>
+                
+                {event.event_info && (
+                  <Text style={styles.liveEventDescription}>{event.event_info}</Text>
+                )}
+                
+                <View style={styles.liveEventDetails}>
+                  <View style={styles.liveEventDetailItem}>
+                    <IconSymbol
+                      ios_icon_name="calendar"
+                      android_material_icon_name="calendar-today"
+                      size={16}
+                      color={colors.textSecondary}
+                    />
+                    <Text style={styles.liveEventDetailText}>
+                      {formatEventDate(event.event_date)}
+                    </Text>
+                  </View>
+                  <View style={styles.liveEventDetailItem}>
+                    <IconSymbol
+                      ios_icon_name="clock"
+                      android_material_icon_name="access-time"
+                      size={16}
+                      color={colors.textSecondary}
+                    />
+                    <Text style={styles.liveEventDetailText}>
+                      {event.event_hour}
+                    </Text>
+                  </View>
+                  {event.language && (
+                    <View style={styles.liveEventDetailItem}>
+                      <IconSymbol
+                        ios_icon_name="globe"
+                        android_material_icon_name="language"
+                        size={16}
+                        color={colors.textSecondary}
+                      />
+                      <Text style={styles.liveEventDetailText}>
+                        {event.language}
+                      </Text>
+                    </View>
+                  )}
+                  {event.region && (
+                    <View style={styles.liveEventDetailItem}>
+                      <IconSymbol
+                        ios_icon_name="location.fill"
+                        android_material_icon_name="location-on"
+                        size={16}
+                        color={colors.textSecondary}
+                      />
+                      <Text style={styles.liveEventDetailText}>
+                        {event.region}
+                      </Text>
+                    </View>
+                  )}
+                </View>
 
-            {/* Registration and Join Buttons */}
-            <View style={styles.trainingActions}>
-              {!registration ? (
                 <TouchableOpacity
-                  style={[styles.registerButton, registering && styles.registerButtonDisabled]}
-                  onPress={handleRegister}
-                  disabled={registering}
+                  style={styles.joinEventButton}
+                  onPress={() => handleJoinEvent(event)}
                   activeOpacity={0.7}
                 >
-                  {registering ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.registerButtonText}>Register</Text>
-                  )}
+                  <Text style={styles.joinEventButtonText}>Join Event</Text>
                 </TouchableOpacity>
-              ) : (
-                <View style={styles.registeredButton}>
-                  <IconSymbol
-                    ios_icon_name="checkmark.circle.fill"
-                    android_material_icon_name="check-circle"
-                    size={20}
-                    color="#FFFFFF"
-                  />
-                  <Text style={styles.registeredButtonText}>Registered</Text>
-                </View>
-              )}
-
-              <TouchableOpacity
-                style={[
-                  styles.joinButton,
-                  !canJoinTraining() && styles.joinButtonDisabled,
-                ]}
-                onPress={handleJoinTraining}
-                disabled={!canJoinTraining()}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.joinButtonText,
-                    !canJoinTraining() && styles.joinButtonTextDisabled,
-                  ]}
-                >
-                  Join Training
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {!registration && (
-              <Text style={styles.trainingHint}>Register to join the training</Text>
-            )}
-            {registration && !isTrainingToday() && (
-              <Text style={styles.trainingHint}>
-                Join button will be enabled on the day of training
-              </Text>
-            )}
+              </View>
+            ))}
           </View>
         ) : (
-          <View style={styles.noTrainingCard}>
+          <View style={styles.noEventsCard}>
             <IconSymbol
               ios_icon_name="calendar.badge.exclamationmark"
               android_material_icon_name="event-busy"
               size={48}
               color={colors.textSecondary}
             />
-            <Text style={styles.noTrainingTitle}>No Upcoming Training</Text>
-            <Text style={styles.noTrainingText}>
-              Check back soon for new live training sessions!
+            <Text style={styles.noEventsTitle}>No Upcoming Events</Text>
+            <Text style={styles.noEventsText}>
+              Check back soon for new live events!
             </Text>
           </View>
         )}
@@ -831,11 +703,20 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
   },
-  liveTrainingCard: {
+  sectionTitle: {
+    fontSize: 22,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.text,
+    marginBottom: 16,
+  },
+  liveEventsSection: {
+    marginBottom: 24,
+  },
+  liveEventCard: {
     backgroundColor: colors.backgroundAlt,
     borderRadius: 24,
     padding: 24,
-    marginBottom: 24,
+    marginBottom: 16,
     borderWidth: 3,
     borderColor: colors.primary,
     shadowColor: colors.primary,
@@ -844,38 +725,38 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 12,
   },
-  noTrainingCard: {
+  noEventsCard: {
     backgroundColor: colors.backgroundAlt,
     borderRadius: 24,
     padding: 32,
     marginBottom: 24,
     alignItems: 'center',
   },
-  noTrainingTitle: {
+  noEventsTitle: {
     fontSize: 20,
     fontFamily: 'Poppins_700Bold',
     color: colors.text,
     marginTop: 16,
     marginBottom: 8,
   },
-  noTrainingText: {
+  noEventsText: {
     fontSize: 15,
     fontFamily: 'Poppins_400Regular',
     color: colors.textSecondary,
     textAlign: 'center',
   },
-  liveTrainingHeader: {
+  liveEventHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
   },
-  liveTrainingTitle: {
-    fontSize: 14,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.textSecondary,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+  liveEventName: {
+    fontSize: 24,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.text,
+    flex: 1,
+    marginRight: 12,
   },
   liveBadge: {
     backgroundColor: colors.error,
@@ -889,39 +770,28 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
-  liveTrainingName: {
-    fontSize: 24,
-    fontFamily: 'Poppins_700Bold',
-    color: colors.text,
-    marginBottom: 8,
-  },
-  liveTrainingDescription: {
+  liveEventDescription: {
     fontSize: 15,
     fontFamily: 'Poppins_400Regular',
     color: colors.textSecondary,
     marginBottom: 16,
     lineHeight: 22,
   },
-  liveTrainingDetails: {
+  liveEventDetails: {
     gap: 12,
     marginBottom: 20,
   },
-  liveTrainingDetailItem: {
+  liveEventDetailItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  liveTrainingDetailText: {
+  liveEventDetailText: {
     fontSize: 15,
     fontFamily: 'Poppins_500Medium',
     color: colors.text,
   },
-  trainingActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  registerButton: {
-    flex: 1,
+  joinEventButton: {
     backgroundColor: colors.primary,
     borderRadius: 16,
     padding: 16,
@@ -929,58 +799,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 52,
   },
-  registerButtonDisabled: {
-    opacity: 0.6,
-  },
-  registerButtonText: {
+  joinEventButtonText: {
     fontSize: 16,
     fontFamily: 'Poppins_700Bold',
     color: '#FFFFFF',
-  },
-  registeredButton: {
-    flex: 1,
-    backgroundColor: colors.success,
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
-    minHeight: 52,
-  },
-  registeredButtonText: {
-    fontSize: 16,
-    fontFamily: 'Poppins_700Bold',
-    color: '#FFFFFF',
-  },
-  joinButton: {
-    flex: 1,
-    backgroundColor: colors.primary,
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 52,
-  },
-  joinButtonDisabled: {
-    backgroundColor: colors.grey,
-    opacity: 0.5,
-  },
-  joinButtonText: {
-    fontSize: 16,
-    fontFamily: 'Poppins_700Bold',
-    color: '#FFFFFF',
-  },
-  joinButtonTextDisabled: {
-    color: colors.textSecondary,
-  },
-  trainingHint: {
-    fontSize: 13,
-    fontFamily: 'Poppins_500Medium',
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 12,
-    fontStyle: 'italic',
   },
   progressCard: {
     backgroundColor: colors.backgroundAlt,
