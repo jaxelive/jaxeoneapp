@@ -504,6 +504,19 @@ export default function AcademyScreen() {
                         {formatTo12Hour(event.event_hour)}
                       </Text>
                     </View>
+                    {event.region && (
+                      <View style={styles.liveEventDetailItem}>
+                        <IconSymbol
+                          ios_icon_name="globe"
+                          android_material_icon_name="public"
+                          size={16}
+                          color="#999999"
+                        />
+                        <Text style={styles.liveEventTimezoneText}>
+                          {event.region}
+                        </Text>
+                      </View>
+                    )}
                     {event.language && (
                       <View style={styles.liveEventDetailItem}>
                         <IconSymbol
@@ -956,6 +969,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: 'Poppins_500Medium',
     color: colors.text,
+  },
+  liveEventTimezoneText: {
+    fontSize: 15,
+    fontFamily: 'Poppins_500Medium',
+    color: '#999999',
   },
   eventButtonsContainer: {
     flexDirection: 'row',
