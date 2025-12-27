@@ -1,249 +1,163 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Dimensions,
-  TouchableOpacity,
+  Animated,
   Image,
-  Alert,
-  ActivityIndicator,
-  ScrollView,
+  TouchableOpacity,
   Platform,
+  StatusBar,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
-import { router } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { colors } from '@/styles/commonStyles';
-import { supabase } from '@/app/integrations/supabase/client';
-import * as ImagePicker from 'expo-image-picker';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Carousel from 'react-native-reanimated-carousel';
+import { useTheme } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
-import { VideoView, useVideoPlayer } from 'expo-video';
-import { IconSymbol } from '@/components/IconSymbol';
+import * as ImagePicker from 'expo-image-picker';
+import { supabase } from '@/app/integrations/supabase/client';
+import { Video, ResizeMode } from 'expo-av';
+import Icon from 'react-native-vector-icons/Ionicons';
+import { uploadImageToStorage } from '@/utils/imageUpload';
 import { useCreatorData } from '@/hooks/useCreatorData';
-
-const { width, height } = Dimensions.get('window');
 
 interface OnboardingSlide {
   id: string;
-  title: string;
-  content: string | null;
-  media_type: 'image' | 'video' | 'none' | null;
-  media_url: string | null;
   slide_order: number;
+  title: string;
+  content: string;
+  media_url: string;
+  media_type?: 'image' | 'video' | 'none';
   slide_type: 'default' | 'notification_request' | 'profile_upload';
 }
 
-export default function OnboardingScreen() {
-  const { creator, refetch } = useCreatorData();
+const { width, height } = Dimensions.get('window');
+
+const Onboarding = () => {
+  const theme = useTheme();
+  const router = useRouter();
+  const { creator } = useCreatorData();
   const [slides, setSlides] = useState<OnboardingSlide[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+  const [currentMediaUrl, setCurrentMediaUrl] = useState<string | null>(null);
+  const videoPlayer = useRef<Video>(null);
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.5)).current;
+  const astronautAnim = useRef(new Animated.Value(0)).current;
+
   const [profileImage, setProfileImage] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [notificationStatus, setNotificationStatus] = useState<'granted' | 'denied' | 'undetermined'>('undetermined');
+  const [isUploadingProfile, setIsUploadingProfile] = useState(false);
 
-  // Helper function to check if media URL is valid
-  const hasValidMediaUrl = (url: string | null | undefined): boolean => {
-    return !!url && url.trim() !== '';
-  };
-
-  const currentSlide = slides[currentIndex];
-  const currentMediaUrl = hasValidMediaUrl(currentSlide?.media_url) ? currentSlide.media_url : null;
-  const hasVideo = currentSlide?.media_type === 'video' && currentMediaUrl;
-
-  // Only create video player if we have a valid video URL
-  const videoPlayer = useVideoPlayer(
-    hasVideo ? currentMediaUrl! : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-    (player) => {
-      if (hasVideo) {
-        player.loop = true;
-        player.play();
-      } else {
-        player.pause();
-      }
-    }
-  );
+  const [notificationStatus, setNotificationStatus] = useState<boolean | null>(null);
 
   useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 1200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(astronautAnim, {
+        toValue: 1,
+        duration: 1500,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [astronautAnim, fadeAnim, scaleAnim]);
+
+  useEffect(() => {
+    const fetchOnboardingSlides = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('onboarding_slides')
+          .select('*')
+          .order('slide_order', { ascending: true });
+
+        if (error) {
+          console.error('Error fetching onboarding slides:', error);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          setSlides(data);
+          setCurrentMediaUrl(data[0].media_url);
+        } else {
+          console.warn('No onboarding slides found.');
+        }
+      } catch (error) {
+        console.error('Unexpected error fetching onboarding slides:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
     fetchOnboardingSlides();
-    checkNotificationPermissions();
   }, []);
 
-  useEffect(() => {
-    // Update video player when slide changes
-    if (currentSlide?.media_type === 'video' && currentMediaUrl) {
-      videoPlayer.replace(currentMediaUrl);
-      videoPlayer.play();
-    } else {
-      videoPlayer.pause();
-    }
-  }, [currentIndex, slides]);
-
-  const checkNotificationPermissions = async () => {
-    const { status } = await Notifications.getPermissionsAsync();
-    setNotificationStatus(status);
+  const handleSlideChange = (index: number) => {
+    setCurrentSlideIndex(index);
+    setCurrentMediaUrl(slides[index]?.media_url || null);
   };
 
-  const fetchOnboardingSlides = async () => {
-    try {
-      setLoading(true);
-      console.log('[Onboarding] Starting to fetch onboarding slides...');
-
-      // Fetch active onboarding - use limit(1) instead of single() to handle multiple active onboardings
-      const { data: onboardingData, error: onboardingError } = await supabase
-        .from('onboardings')
-        .select('id, name, region, language')
-        .eq('is_active', true)
-        .limit(1);
-
-      console.log('[Onboarding] Onboarding query result:', { onboardingData, onboardingError });
-
-      if (onboardingError) {
-        console.error('[Onboarding] Error fetching onboarding:', onboardingError);
-        Alert.alert('Error', 'Failed to load onboarding content.');
-        setLoading(false);
-        return;
-      }
-
-      if (!onboardingData || onboardingData.length === 0) {
-        console.warn('[Onboarding] No active onboarding found');
-        Alert.alert('Info', 'No onboarding content is currently available.');
-        setLoading(false);
-        return;
-      }
-
-      const onboarding = onboardingData[0];
-      console.log('[Onboarding] Using onboarding:', onboarding);
-
-      // Fetch slides for this onboarding
-      const { data: slidesData, error: slidesError } = await supabase
-        .from('onboarding_slides')
-        .select('*')
-        .eq('onboarding_id', onboarding.id)
-        .order('slide_order', { ascending: true });
-
-      console.log('[Onboarding] Slides query result:', { 
-        slidesCount: slidesData?.length, 
-        slidesError,
-        slides: slidesData 
-      });
-
-      if (slidesError) {
-        console.error('[Onboarding] Error fetching slides:', slidesError);
-        Alert.alert('Error', 'Failed to load onboarding slides.');
-        setLoading(false);
-        return;
-      }
-
-      if (!slidesData || slidesData.length === 0) {
-        console.warn('[Onboarding] No slides found for onboarding:', onboarding.id);
-        Alert.alert('Info', 'No onboarding slides are available.');
-        setLoading(false);
-        return;
-      }
-
-      console.log('[Onboarding] Successfully loaded', slidesData.length, 'slides');
-      setSlides(slidesData as OnboardingSlide[]);
-    } catch (error) {
-      console.error('[Onboarding] Unexpected error:', error);
-      Alert.alert('Error', 'An unexpected error occurred while loading onboarding.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleNext = async () => {
-    const currentSlide = slides[currentIndex];
-
-    // Handle interactive slides
-    if (currentSlide.slide_type === 'notification_request') {
-      if (notificationStatus !== 'granted') {
-        Alert.alert(
-          'Enable Notifications',
-          'Please enable notifications to continue and stay updated on important announcements.',
-          [{ text: 'OK' }]
-        );
-        return;
-      }
-    }
-
-    if (currentSlide.slide_type === 'profile_upload') {
-      if (!profileImage && !creator?.avatar_url && !creator?.profile_picture_url) {
-        Alert.alert(
-          'Profile Photo Required',
-          'Please upload a profile photo to continue.',
-          [{ text: 'OK' }]
-        );
-        return;
-      }
-
-      // Upload profile picture if selected
-      if (profileImage && uploading === false) {
-        await uploadProfilePicture();
-      }
-    }
-
-    // Move to next slide or finish
-    if (currentIndex < slides.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-    } else {
-      // Onboarding complete
-      router.replace('/(tabs)/(home)/');
-    }
-  };
-
-  const handleBack = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
-    }
-  };
-
-  const handleSkip = () => {
-    Alert.alert(
-      'Skip Onboarding?',
-      'Are you sure you want to skip the onboarding? You can always access it later from Settings.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Skip', style: 'destructive', onPress: () => router.replace('/(tabs)/(home)/') },
-      ]
+  const renderItem = ({ item }: { item: OnboardingSlide }) => {
+    return (
+      <View style={styles.slide}>
+        {item.media_url ? (
+          <>
+            {item.media_type === 'video' ? (
+              <Video
+                ref={videoPlayer}
+                style={styles.video}
+                source={{ uri: item.media_url }}
+                resizeMode={ResizeMode.CONTAIN}
+                isLooping
+                shouldPlay
+                isMuted
+              />
+            ) : (
+              <Image
+                source={{ uri: item.media_url }}
+                style={styles.image}
+                resizeMode="contain"
+              />
+            )}
+          </>
+        ) : (
+          <Icon name="image-off-outline" size={100} color={theme.colors.text} />
+        )}
+        <Text style={[styles.title, { color: theme.colors.text }]}>{item.title}</Text>
+        <Text style={[styles.text, { color: theme.colors.text }]}>{item.content}</Text>
+      </View>
     );
   };
 
-  const requestNotificationPermissions = async () => {
-    try {
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
-
-      if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-      }
-
-      setNotificationStatus(finalStatus);
-
-      if (finalStatus === 'granted') {
-        Alert.alert('Success', 'Notifications enabled! You\'ll stay updated on everything important.');
-      } else {
-        Alert.alert(
-          'Notifications Disabled',
-          'You can enable notifications later in your device settings.'
-        );
-      }
-    } catch (error) {
-      console.error('[Onboarding] Error requesting notifications:', error);
-      Alert.alert('Error', 'Failed to request notification permissions.');
+  const handleNotificationRequest = async () => {
+    const { status } = await Notifications.requestPermissionsAsync();
+    setNotificationStatus(status === 'granted');
+    // Move to the next slide after the request
+    if (currentSlideIndex < slides.length - 1) {
+      handleSlideChange(currentSlideIndex + 1);
+    } else {
+      router.replace('/(tabs)/home');
     }
   };
 
   const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-    if (status !== 'granted') {
-      Alert.alert(
-        'Permission Required',
-        'We need camera roll permissions to upload your profile picture.'
-      );
+    if (permissionResult.granted === false) {
+      Alert.alert('Permission Required', 'Permission to access camera roll is required!');
       return;
     }
 
@@ -254,508 +168,266 @@ export default function OnboardingScreen() {
       quality: 0.8,
     });
 
+    console.log('[Onboarding] Image picker result:', result);
+
     if (!result.canceled && result.assets[0]) {
       setProfileImage(result.assets[0].uri);
     }
   };
 
-  const uploadProfilePicture = async () => {
-    if (!profileImage || !creator) {
+  const handleProfileUpload = async () => {
+    if (!profileImage) {
+      Alert.alert('No Image Selected', 'Please select a profile image first.');
       return;
     }
 
-    setUploading(true);
+    if (!creator) {
+      Alert.alert('Error', 'Creator profile not found. Please try again later.');
+      return;
+    }
 
+    setIsUploadingProfile(true);
     try {
-      // In a production app, you would upload to Supabase Storage
-      // For now, we'll update the creators table with the URI
-      const { error } = await supabase
+      console.log('[Onboarding] Uploading profile picture...');
+      
+      // Upload the image to Supabase Storage
+      const uploadResult = await uploadImageToStorage(
+        profileImage,
+        'avatars',
+        `creators/${creator.id}`,
+        800,
+        800,
+        0.8
+      );
+
+      console.log('[Onboarding] Profile picture uploaded:', uploadResult.publicUrl);
+
+      // Update the creators table with the new profile picture URL
+      const { error: updateError } = await supabase
         .from('creators')
-        .update({ 
-          avatar_url: profileImage,
-          profile_picture_url: profileImage 
+        .update({
+          profile_picture_url: uploadResult.publicUrl,
+          avatar_url: uploadResult.publicUrl,
         })
         .eq('id', creator.id);
 
-      if (error) {
-        console.error('[Onboarding] Upload error:', error);
-        Alert.alert('Error', 'Failed to upload profile picture. Please try again.');
+      if (updateError) {
+        console.error('[Onboarding] Error updating creator profile:', updateError);
+        Alert.alert('Upload Error', 'Failed to save profile picture. Please try again.');
         return;
       }
 
-      await refetch();
+      console.log('[Onboarding] Profile picture saved successfully');
       Alert.alert('Success', 'Profile picture uploaded successfully!');
+
+      // Move to the next slide or home
+      if (currentSlideIndex < slides.length - 1) {
+        handleSlideChange(currentSlideIndex + 1);
+      } else {
+        router.replace('/(tabs)/home');
+      }
     } catch (error) {
-      console.error('[Onboarding] Unexpected error:', error);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+      console.error('[Onboarding] Error uploading profile picture:', error);
+      Alert.alert('Upload Error', 'An unexpected error occurred. Please try again.');
     } finally {
-      setUploading(false);
+      setIsUploadingProfile(false);
     }
   };
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading onboarding...</Text>
-      </View>
-    );
-  }
+  const currentSlide = slides[currentSlideIndex];
 
-  if (slides.length === 0) {
+  useEffect(() => {
+    if (currentSlide?.media_type === 'video' && currentMediaUrl) {
+      videoPlayer.current?.playAsync();
+    } else {
+      videoPlayer.current?.pauseAsync();
+    }
+  }, [currentMediaUrl, currentSlide?.media_type]);
+
+  if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.errorText}>No onboarding content available</Text>
-        <TouchableOpacity style={styles.button} onPress={() => router.back()}>
-          <Text style={styles.buttonText}>Go Back</Text>
-        </TouchableOpacity>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      {/* Skip Button */}
-      <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
-        <Text style={styles.skipButtonText}>Skip</Text>
-      </TouchableOpacity>
-
-      {/* Slide Content */}
-      <ScrollView 
-        contentContainerStyle={styles.slideContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Media Section */}
-        {currentSlide.media_type === 'video' && currentMediaUrl ? (
-          <View style={styles.mediaContainer}>
-            <VideoView
-              style={styles.video}
-              player={videoPlayer}
-              allowsFullscreen={false}
-              allowsPictureInPicture={false}
-            />
-          </View>
-        ) : currentSlide.media_type === 'image' && currentMediaUrl ? (
-          <View style={styles.mediaContainer}>
-            <Image
-              source={{ uri: currentMediaUrl }}
-              style={styles.image}
-              resizeMode="contain"
-            />
-          </View>
-        ) : (
-          <View style={styles.mediaContainer}>
-            <View style={styles.placeholderMedia}>
-              <IconSymbol
-                ios_icon_name="sparkles"
-                android_material_icon_name="auto_awesome"
-                size={80}
-                color={colors.primary}
-              />
-            </View>
-          </View>
-        )}
-
-        {/* Title */}
-        <Text style={styles.title}>{currentSlide.title}</Text>
-
-        {/* Content */}
-        {currentSlide.content && (
-          <Text style={styles.content}>{currentSlide.content}</Text>
-        )}
-
-        {/* Interactive Elements */}
-        {currentSlide.slide_type === 'notification_request' && (
-          <View style={styles.interactiveSection}>
-            <TouchableOpacity
-              style={[
-                styles.actionButton,
-                notificationStatus === 'granted' && styles.actionButtonSuccess,
-              ]}
-              onPress={requestNotificationPermissions}
-              disabled={notificationStatus === 'granted'}
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
+      <Carousel
+        width={width}
+        height={height}
+        data={slides}
+        renderItem={renderItem}
+        loop={false}
+        onSnapToItem={handleSlideChange}
+      />
+      <View style={styles.buttonsContainer}>
+        {currentSlide?.slide_type === 'notification_request' ? (
+          <TouchableOpacity style={styles.button} onPress={handleNotificationRequest}>
+            <Text style={styles.buttonText}>
+              {notificationStatus === null
+                ? 'Request Notifications'
+                : notificationStatus
+                  ? 'Notifications Enabled'
+                  : 'Enable Notifications'}
+            </Text>
+          </TouchableOpacity>
+        ) : currentSlide?.slide_type === 'profile_upload' ? (
+          <>
+            <TouchableOpacity 
+              style={[styles.button, isUploadingProfile && styles.buttonDisabled]} 
+              onPress={pickImage}
+              disabled={isUploadingProfile}
             >
-              <LinearGradient
-                colors={
-                  notificationStatus === 'granted'
-                    ? ['#10B981', '#059669']
-                    : colors.gradientPurple
-                }
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.actionButtonGradient}
-              >
-                <IconSymbol
-                  ios_icon_name={
-                    notificationStatus === 'granted'
-                      ? 'checkmark.circle.fill'
-                      : 'bell.fill'
-                  }
-                  android_material_icon_name={
-                    notificationStatus === 'granted' ? 'check_circle' : 'notifications'
-                  }
-                  size={24}
-                  color="#FFFFFF"
-                />
-                <Text style={styles.actionButtonText}>
-                  {notificationStatus === 'granted'
-                    ? 'Notifications Enabled ✓'
-                    : 'Enable Notifications'}
-                </Text>
-              </LinearGradient>
+              <Text style={styles.buttonText}>
+                {profileImage ? 'Change Image' : 'Pick an Image'}
+              </Text>
             </TouchableOpacity>
-          </View>
-        )}
-
-        {currentSlide.slide_type === 'profile_upload' && (
-          <View style={styles.interactiveSection}>
-            <TouchableOpacity style={styles.avatarUploadContainer} onPress={pickImage}>
-              {profileImage || creator?.avatar_url || creator?.profile_picture_url ? (
-                <Image
-                  source={{
-                    uri:
-                      profileImage ||
-                      creator?.profile_picture_url ||
-                      creator?.avatar_url ||
-                      '',
-                  }}
-                  style={styles.avatarPreview}
-                />
+            {profileImage && (
+              <View style={styles.imagePreviewContainer}>
+                <Image source={{ uri: profileImage }} style={styles.imagePreview} />
+              </View>
+            )}
+            <TouchableOpacity 
+              style={[styles.button, styles.uploadButton, (!profileImage || isUploadingProfile) && styles.buttonDisabled]} 
+              onPress={handleProfileUpload}
+              disabled={!profileImage || isUploadingProfile}
+            >
+              {isUploadingProfile ? (
+                <ActivityIndicator color="#fff" />
               ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <IconSymbol
-                    ios_icon_name="camera.fill"
-                    android_material_icon_name="add_a_photo"
-                    size={48}
-                    color={colors.primary}
-                  />
-                  <Text style={styles.avatarPlaceholderText}>Tap to Upload Photo</Text>
-                </View>
+                <Text style={styles.buttonText}>Upload Profile Picture</Text>
               )}
             </TouchableOpacity>
-
-            {profileImage && !uploading && (
-              <TouchableOpacity
-                style={styles.uploadButton}
-                onPress={uploadProfilePicture}
-              >
-                <LinearGradient
-                  colors={colors.gradientPurple}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.uploadButtonGradient}
-                >
-                  <Text style={styles.uploadButtonText}>Upload Photo</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            )}
-
-            {uploading && (
-              <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 16 }} />
-            )}
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Bottom Navigation */}
-      <View style={styles.bottomNav}>
-        {/* Progress Indicators */}
-        <View style={styles.progressContainer}>
-          {slides.map((_, index) => (
-            <View
-              key={index}
-              style={[
-                styles.progressDot,
-                index === currentIndex && styles.progressDotActive,
-                index < currentIndex && styles.progressDotCompleted,
-              ]}
-            />
-          ))}
-        </View>
-
-        {/* Navigation Buttons */}
-        <View style={styles.navButtons}>
-          {currentIndex > 0 && (
-            <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-              <IconSymbol
-                ios_icon_name="chevron.left"
-                android_material_icon_name="chevron_left"
-                size={24}
-                color={colors.text}
-              />
-              <Text style={styles.backButtonText}>Back</Text>
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity
-            style={[styles.nextButton, currentIndex === 0 && styles.nextButtonFull]}
-            onPress={handleNext}
-          >
-            <LinearGradient
-              colors={colors.gradientPurple}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.nextButtonGradient}
+            <TouchableOpacity
+              style={[styles.button, styles.skipButton]}
+              onPress={() => {
+                if (currentSlideIndex < slides.length - 1) {
+                  handleSlideChange(currentSlideIndex + 1);
+                } else {
+                  router.replace('/(tabs)/home');
+                }
+              }}
             >
-              <Text style={styles.nextButtonText}>
-                {currentIndex === slides.length - 1 ? 'Get Started' : 'Next'}
-              </Text>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="chevron_right"
-                size={24}
-                color="#FFFFFF"
-              />
-            </LinearGradient>
+              <Text style={styles.skipButtonText}>Skip for Now</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => {
+              if (currentSlideIndex < slides.length - 1) {
+                handleSlideChange(currentSlideIndex + 1);
+              } else {
+                router.replace('/(tabs)/home');
+              }
+            }}
+          >
+            <Text style={styles.buttonText}>Next</Text>
           </TouchableOpacity>
-        </View>
+        )}
       </View>
-    </View>
+    </SafeAreaView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
+  },
+  slide: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     padding: 20,
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.textSecondary,
-  },
-  errorText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.error,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  skipButton: {
-    position: 'absolute',
-    top: Platform.OS === 'android' ? 48 : 60,
-    right: 20,
-    zIndex: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: colors.backgroundAlt,
-    borderRadius: 20,
-  },
-  skipButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  slideContainer: {
-    flexGrow: 1,
-    paddingTop: Platform.OS === 'android' ? 100 : 120,
-    paddingHorizontal: 24,
-    paddingBottom: 200,
-  },
-  mediaContainer: {
-    width: '100%',
-    height: height * 0.35,
-    marginBottom: 32,
-    borderRadius: 24,
-    overflow: 'hidden',
-    backgroundColor: colors.backgroundAlt,
-  },
-  video: {
-    width: '100%',
-    height: '100%',
   },
   image: {
     width: '100%',
-    height: '100%',
+    height: '50%',
+    marginBottom: 20,
   },
-  placeholderMedia: {
+  video: {
     width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
+    height: '50%',
+    marginBottom: 20,
   },
   title: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: colors.text,
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 10,
     textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 40,
   },
-  content: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 28,
-    marginBottom: 24,
-  },
-  interactiveSection: {
-    marginTop: 24,
-    alignItems: 'center',
-  },
-  actionButton: {
-    width: '100%',
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  actionButtonSuccess: {
-    opacity: 0.8,
-  },
-  actionButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 18,
-    paddingHorizontal: 24,
-    gap: 12,
-  },
-  actionButtonText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  avatarUploadContainer: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    overflow: 'hidden',
-    marginBottom: 16,
-  },
-  avatarPreview: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarPlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: colors.backgroundAlt,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: colors.primary,
-    borderStyle: 'dashed',
-  },
-  avatarPlaceholderText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginTop: 12,
-  },
-  uploadButton: {
-    width: '100%',
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  uploadButtonGradient: {
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  uploadButtonText: {
+  text: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    textAlign: 'center',
   },
-  bottomNav: {
+  buttonsContainer: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: colors.backgroundAlt,
-    paddingTop: 24,
-    paddingBottom: Platform.OS === 'android' ? 24 : 40,
-    paddingHorizontal: 24,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
-  },
-  progressContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 24,
-  },
-  progressDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.border,
-  },
-  progressDotActive: {
-    width: 32,
-    backgroundColor: colors.primary,
-  },
-  progressDotCompleted: {
-    backgroundColor: colors.primary,
-    opacity: 0.5,
-  },
-  navButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  backButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    backgroundColor: colors.background,
-    borderRadius: 16,
-    gap: 8,
-  },
-  backButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  nextButton: {
-    flex: 2,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  nextButtonFull: {
-    flex: 1,
-  },
-  nextButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    gap: 8,
-  },
-  nextButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    bottom: 40,
+    width: '100%',
+    paddingHorizontal: 20,
   },
   button: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    backgroundColor: colors.primary,
-    borderRadius: 12,
+    backgroundColor: '#8B5CF6',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  uploadButton: {
+    backgroundColor: '#10B981',
+  },
+  skipButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#8B5CF6',
   },
   buttonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  skipButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#8B5CF6',
+  },
+  imagePreviewContainer: {
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  imagePreview: {
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    borderWidth: 3,
+    borderColor: '#8B5CF6',
+  },
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modal: {
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    minWidth: 200,
   },
 });
+
+export default Onboarding;
