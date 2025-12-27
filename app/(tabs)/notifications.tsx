@@ -15,23 +15,14 @@ import { useCreatorData } from '@/hooks/useCreatorData';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 
-interface AgencyNews {
+interface Notification {
   id: string;
-  title: string;
-  body: string;
-  region: string | null;
-  published_at: string;
-}
-
-interface Contest {
-  id: string;
-  title: string;
-  description: string;
-  region: string | null;
-  start_at: string;
-  end_at: string;
-  prize_cents: number;
-  rules_url: string | null;
+  type: 'news' | 'contests';
+  title: string | null;
+  content: string;
+  region: string;
+  language: string;
+  created_at: string;
 }
 
 // Placeholder financial/progress activities
@@ -71,8 +62,8 @@ export default function NotificationsScreen() {
     Poppins_700Bold,
   });
 
-  const [agencyNews, setAgencyNews] = useState<AgencyNews[]>([]);
-  const [contests, setContests] = useState<Contest[]>([]);
+  const [newsNotifications, setNewsNotifications] = useState<Notification[]>([]);
+  const [contestNotifications, setContestNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [newsExpanded, setNewsExpanded] = useState(true);
 
@@ -86,28 +77,35 @@ export default function NotificationsScreen() {
     try {
       setLoading(true);
 
-      // Fetch agency news
+      // Fetch news notifications
       const { data: newsData, error: newsError } = await supabase
-        .from('agency_news')
+        .from('notifications')
         .select('*')
-        .or(`region.is.null,region.eq.${creator.region}`)
-        .order('published_at', { ascending: false })
+        .eq('type', 'news')
+        .or(`region.eq.${creator.region},region.eq.All`)
+        .order('created_at', { ascending: false })
         .limit(10);
 
-      if (newsError) throw newsError;
-      setAgencyNews(newsData || []);
+      if (newsError) {
+        console.error('Error fetching news:', newsError);
+      } else {
+        setNewsNotifications(newsData || []);
+      }
 
-      // Fetch contests
+      // Fetch contest notifications
       const { data: contestsData, error: contestsError } = await supabase
-        .from('contests')
+        .from('notifications')
         .select('*')
-        .or(`region.is.null,region.eq.${creator.region}`)
-        .gte('end_at', new Date().toISOString())
-        .order('start_at', { ascending: true })
-        .limit(5);
+        .eq('type', 'contests')
+        .or(`region.eq.${creator.region},region.eq.All`)
+        .order('created_at', { ascending: false })
+        .limit(10);
 
-      if (contestsError) throw contestsError;
-      setContests(contestsData || []);
+      if (contestsError) {
+        console.error('Error fetching contests:', contestsError);
+      } else {
+        setContestNotifications(contestsData || []);
+      }
     } catch (error: any) {
       console.error('Error fetching notifications:', error);
     } finally {
@@ -189,59 +187,86 @@ export default function NotificationsScreen() {
 
         {newsExpanded && (
           <View style={styles.expandableContent}>
-            {/* Agency News */}
-            {agencyNews.length > 0 && (
+            {/* News Section */}
+            {newsNotifications.length > 0 && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Agency Announcements</Text>
-                {agencyNews.map((news) => (
+                <View style={styles.sectionHeader}>
+                  <IconSymbol
+                    ios_icon_name="newspaper.fill"
+                    android_material_icon_name="article"
+                    size={20}
+                    color={colors.primary}
+                  />
+                  <Text style={styles.sectionTitle}>Agency News</Text>
+                </View>
+                {newsNotifications.map((news) => (
                   <View key={news.id} style={styles.newsCard}>
                     <View style={styles.newsHeader}>
-                      <Text style={styles.newsTitle}>{news.title}</Text>
-                      <Text style={styles.newsDate}>{formatDate(news.published_at)}</Text>
-                    </View>
-                    <Text style={styles.newsBody}>{news.body}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {/* Contests */}
-            {contests.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Active Contests</Text>
-                {contests.map((contest) => (
-                  <View key={contest.id} style={styles.contestCard}>
-                    <View style={styles.contestHeader}>
-                      <IconSymbol
-                        ios_icon_name="trophy.fill"
-                        android_material_icon_name="emoji-events"
-                        size={32}
-                        color={colors.primary}
-                      />
-                      <View style={styles.contestInfo}>
-                        <Text style={styles.contestTitle}>{contest.title}</Text>
-                        {contest.prize_cents > 0 && (
-                          <Text style={styles.contestPrize}>
-                            Prize: ${(contest.prize_cents / 100).toFixed(2)}
-                          </Text>
-                        )}
+                      <View style={styles.newsIconContainer}>
+                        <IconSymbol
+                          ios_icon_name="info.circle.fill"
+                          android_material_icon_name="info"
+                          size={20}
+                          color={colors.primary}
+                        />
+                      </View>
+                      <View style={styles.newsHeaderContent}>
+                        <Text style={styles.newsTitle}>{news.title || 'News Update'}</Text>
+                        <Text style={styles.newsDate}>{formatDate(news.created_at)}</Text>
                       </View>
                     </View>
-                    <Text style={styles.contestDescription}>{contest.description}</Text>
-                    <View style={styles.contestDates}>
-                      <Text style={styles.contestDate}>
-                        Starts: {formatDate(contest.start_at)}
-                      </Text>
-                      <Text style={styles.contestDate}>
-                        Ends: {formatDate(contest.end_at)}
-                      </Text>
-                    </View>
+                    <Text style={styles.newsBody}>{news.content}</Text>
                   </View>
                 ))}
               </View>
             )}
 
-            {agencyNews.length === 0 && contests.length === 0 && (
+            {/* Contests Section */}
+            {contestNotifications.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <IconSymbol
+                    ios_icon_name="trophy.fill"
+                    android_material_icon_name="emoji-events"
+                    size={20}
+                    color="#F59E0B"
+                  />
+                  <Text style={[styles.sectionTitle, { color: '#F59E0B' }]}>Active Contests</Text>
+                </View>
+                {contestNotifications.map((contest) => (
+                  <View key={contest.id} style={styles.contestCard}>
+                    <View style={styles.contestBadge}>
+                      <IconSymbol
+                        ios_icon_name="star.fill"
+                        android_material_icon_name="star"
+                        size={16}
+                        color="#FFFFFF"
+                      />
+                      <Text style={styles.contestBadgeText}>CONTEST</Text>
+                    </View>
+                    <View style={styles.contestHeader}>
+                      <View style={styles.contestIconWrapper}>
+                        <IconSymbol
+                          ios_icon_name="trophy.fill"
+                          android_material_icon_name="emoji-events"
+                          size={40}
+                          color="#F59E0B"
+                        />
+                      </View>
+                      <View style={styles.contestInfo}>
+                        <Text style={styles.contestTitle}>{contest.title || 'Contest Alert'}</Text>
+                        <Text style={styles.contestDate}>
+                          Posted: {formatDate(contest.created_at)}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.contestDescription}>{contest.content}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {newsNotifications.length === 0 && contestNotifications.length === 0 && (
               <View style={styles.emptyState}>
                 <IconSymbol
                   ios_icon_name="bell.slash"
@@ -326,30 +351,47 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 24,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
   sectionTitle: {
     fontSize: 20,
     fontFamily: 'Poppins_700Bold',
     color: colors.text,
-    marginBottom: 12,
   },
   newsCard: {
     backgroundColor: colors.backgroundAlt,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
   },
   newsHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 8,
+    marginBottom: 12,
+    gap: 12,
+  },
+  newsIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(102, 66, 239, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  newsHeaderContent: {
+    flex: 1,
   },
   newsTitle: {
-    flex: 1,
     fontSize: 16,
     fontFamily: 'Poppins_700Bold',
     color: colors.text,
-    marginRight: 8,
+    marginBottom: 4,
   },
   newsDate: {
     fontSize: 12,
@@ -363,18 +405,46 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   contestCard: {
-    backgroundColor: colors.backgroundAlt,
+    backgroundColor: '#1A1A1A',
     borderRadius: 20,
     padding: 20,
     marginBottom: 12,
     borderWidth: 2,
-    borderColor: colors.primary,
+    borderColor: '#F59E0B',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  contestBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  contestBadgeText: {
+    fontSize: 10,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
   contestHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
-    marginBottom: 12,
+    marginBottom: 16,
+  },
+  contestIconWrapper: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   contestInfo: {
     flex: 1,
@@ -382,29 +452,19 @@ const styles = StyleSheet.create({
   contestTitle: {
     fontSize: 18,
     fontFamily: 'Poppins_700Bold',
-    color: colors.text,
+    color: '#FFFFFF',
     marginBottom: 4,
-  },
-  contestPrize: {
-    fontSize: 14,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.primary,
-  },
-  contestDescription: {
-    fontSize: 14,
-    fontFamily: 'Poppins_400Regular',
-    color: colors.textSecondary,
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  contestDates: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
   },
   contestDate: {
     fontSize: 12,
     fontFamily: 'Poppins_500Medium',
-    color: colors.textTertiary,
+    color: '#F59E0B',
+  },
+  contestDescription: {
+    fontSize: 14,
+    fontFamily: 'Poppins_400Regular',
+    color: '#D1D5DB',
+    lineHeight: 20,
   },
   activityCard: {
     flexDirection: 'row',
