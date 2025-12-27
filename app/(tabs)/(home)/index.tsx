@@ -123,6 +123,7 @@ export default function HomeScreen() {
   const [featuredLiveEvent, setFeaturedLiveEvent] = useState<LiveEvent | null>(null);
   const [isRegisteredForEvent, setIsRegisteredForEvent] = useState(false);
   const [registeringEventId, setRegisteringEventId] = useState<string | null>(null);
+  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -140,7 +141,39 @@ export default function HomeScreen() {
     await fetchEducationData();
     await fetchTopCreators();
     await fetchFeaturedLiveEvent();
+    await checkUnreadNotifications();
     setRefreshing(false);
+  };
+
+  const checkUnreadNotifications = async () => {
+    if (!creator) return;
+
+    try {
+      console.log('[HomeScreen] Checking for unread notifications...');
+      
+      // Get the last time user viewed notifications from local storage or use a default
+      // For now, we'll check if there are any notifications from the last 7 days
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('id')
+        .or(`region.eq.${creator.region},region.eq.All`)
+        .gte('created_at', sevenDaysAgo.toISOString())
+        .limit(1);
+
+      if (error) {
+        console.error('[HomeScreen] Error checking notifications:', error);
+        return;
+      }
+
+      const hasNotifications = data && data.length > 0;
+      setHasUnreadNotifications(hasNotifications);
+      console.log('[HomeScreen] Has unread notifications:', hasNotifications);
+    } catch (error: any) {
+      console.error('[HomeScreen] Unexpected error checking notifications:', error);
+    }
   };
 
   useEffect(() => {
@@ -160,6 +193,7 @@ export default function HomeScreen() {
       fetchEducationData();
       fetchTopCreators();
       fetchFeaturedLiveEvent();
+      checkUnreadNotifications();
     }
   }, [creator]);
 
@@ -638,6 +672,9 @@ export default function HomeScreen() {
                         size={16} 
                         color="#FFFFFF" 
                       />
+                      {hasUnreadNotifications && (
+                        <View style={styles.notificationRedDot} />
+                      )}
                     </View>
                   </TouchableOpacity>
                 </View>
@@ -1429,6 +1466,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 3,
     borderColor: '#0F0F0F',
+    position: 'relative',
+  },
+  notificationRedDot: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#EF4444',
+    borderWidth: 2,
+    borderColor: '#6642EF',
   },
   headerInfo: {
     flex: 1,
