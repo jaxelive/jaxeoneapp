@@ -21,7 +21,7 @@ import * as Notifications from 'expo-notifications';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/app/integrations/supabase/client';
 import { Video, ResizeMode } from 'expo-av';
-import Icon from 'react-native-vector-icons/Ionicons';
+import { IconSymbol } from '@/components/IconSymbol';
 import { uploadImageToStorage } from '@/utils/imageUpload';
 import { useCreatorData } from '@/hooks/useCreatorData';
 
@@ -74,7 +74,7 @@ const Onboarding = () => {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [astronautAnim, fadeAnim, scaleAnim]);
+  }, [fadeAnim, scaleAnim, astronautAnim]);
 
   useEffect(() => {
     const fetchOnboardingSlides = async () => {
@@ -134,7 +134,12 @@ const Onboarding = () => {
             )}
           </>
         ) : (
-          <Icon name="image-off-outline" size={100} color={theme.colors.text} />
+          <IconSymbol 
+            ios_icon_name="photo" 
+            android_material_icon_name="image" 
+            size={100} 
+            color={theme.colors.text} 
+          />
         )}
         <Text style={[styles.title, { color: theme.colors.text }]}>{item.title}</Text>
         <Text style={[styles.text, { color: theme.colors.text }]}>{item.content}</Text>
