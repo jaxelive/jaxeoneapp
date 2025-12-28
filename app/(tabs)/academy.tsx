@@ -753,30 +753,87 @@ export default function AcademyScreen() {
                               onPress={() => handleItemPress(course, item, index)}
                               activeOpacity={0.7}
                             >
-                              {/* Circle indicator for videos and quizzes */}
-                              <View style={styles.contentIndicatorContainer}>
-                                <View style={[
-                                  styles.contentIndicatorCircle,
-                                  isCompleted && styles.contentIndicatorCircleCompleted,
-                                ]}>
-                                  {isCompleted ? (
-                                    <IconSymbol
-                                      ios_icon_name="checkmark"
-                                      android_material_icon_name="check"
-                                      size={20}
-                                      color="#FFFFFF"
-                                    />
-                                  ) : item.content_type === 'video' ? (
-                                    <Text style={styles.contentIndicatorNumber}>
-                                      {videoNumber}
-                                    </Text>
+                              {/* Video Thumbnail or Circle indicator */}
+                              {item.content_type === 'video' && item.video ? (
+                                <View style={styles.videoThumbnailContainer}>
+                                  {item.video.thumbnail_url ? (
+                                    <>
+                                      <Image
+                                        source={{ uri: item.video.thumbnail_url }}
+                                        style={styles.videoThumbnail}
+                                        resizeMode="cover"
+                                      />
+                                      {/* Play icon overlay */}
+                                      <View style={styles.playIconOverlay}>
+                                        <View style={styles.playIconCircle}>
+                                          <IconSymbol
+                                            ios_icon_name="play.fill"
+                                            android_material_icon_name="play-arrow"
+                                            size={24}
+                                            color="#FFFFFF"
+                                          />
+                                        </View>
+                                      </View>
+                                      {/* Completion badge */}
+                                      {isCompleted && (
+                                        <View style={styles.completionBadge}>
+                                          <IconSymbol
+                                            ios_icon_name="checkmark.circle.fill"
+                                            android_material_icon_name="check-circle"
+                                            size={24}
+                                            color={colors.primary}
+                                          />
+                                        </View>
+                                      )}
+                                    </>
                                   ) : (
-                                    <Text style={styles.contentIndicatorQuizText}>
-                                      Quiz
-                                    </Text>
+                                    <View style={styles.videoThumbnailPlaceholder}>
+                                      <View style={styles.playIconCircle}>
+                                        <IconSymbol
+                                          ios_icon_name="play.fill"
+                                          android_material_icon_name="play-arrow"
+                                          size={24}
+                                          color="#FFFFFF"
+                                        />
+                                      </View>
+                                      {isCompleted && (
+                                        <View style={styles.completionBadge}>
+                                          <IconSymbol
+                                            ios_icon_name="checkmark.circle.fill"
+                                            android_material_icon_name="check-circle"
+                                            size={24}
+                                            color={colors.primary}
+                                          />
+                                        </View>
+                                      )}
+                                    </View>
                                   )}
+                                  {/* Video number badge */}
+                                  <View style={styles.videoNumberBadge}>
+                                    <Text style={styles.videoNumberText}>{videoNumber}</Text>
+                                  </View>
                                 </View>
-                              </View>
+                              ) : (
+                                <View style={styles.contentIndicatorContainer}>
+                                  <View style={[
+                                    styles.contentIndicatorCircle,
+                                    isCompleted && styles.contentIndicatorCircleCompleted,
+                                  ]}>
+                                    {isCompleted ? (
+                                      <IconSymbol
+                                        ios_icon_name="checkmark"
+                                        android_material_icon_name="check"
+                                        size={20}
+                                        color="#FFFFFF"
+                                      />
+                                    ) : (
+                                      <Text style={styles.contentIndicatorQuizText}>
+                                        Quiz
+                                      </Text>
+                                    )}
+                                  </View>
+                                </View>
+                              )}
 
                               <View style={styles.contentInfo}>
                                 <View style={styles.contentHeader}>
@@ -1128,6 +1185,65 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.primary,
   },
+  videoThumbnailContainer: {
+    width: 120,
+    height: 80,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  videoThumbnail: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 12,
+  },
+  videoThumbnailPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.grey,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+  },
+  playIconOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  playIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(102, 66, 239, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  completionBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: colors.background,
+    borderRadius: 12,
+  },
+  videoNumberBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  videoNumberText: {
+    fontSize: 12,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
+  },
   contentIndicatorContainer: {
     width: 56,
     height: 56,
@@ -1147,11 +1263,6 @@ const styles = StyleSheet.create({
   contentIndicatorCircleCompleted: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
-  },
-  contentIndicatorNumber: {
-    fontSize: 24,
-    fontFamily: 'Poppins_700Bold',
-    color: colors.text,
   },
   contentIndicatorQuizText: {
     fontSize: 12,
