@@ -42,7 +42,6 @@ export default function VideoPlayerScreen() {
   const [isCompleted, setIsCompleted] = useState(false);
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedProgressRef = useRef<number>(0);
-  const hasAutoCompletedRef = useRef<boolean>(false);
 
   const player = useVideoPlayer(videoData?.video_url || '', (player) => {
     player.play();
@@ -75,7 +74,6 @@ export default function VideoPlayerScreen() {
       if (progress && !progressError) {
         setWatchedSeconds(progress.watched_seconds || 0);
         setIsCompleted(progress.completed || false);
-        hasAutoCompletedRef.current = progress.completed || false;
         
         // Calculate initial progress percentage
         if (video.duration_seconds && video.duration_seconds > 0) {
@@ -124,51 +122,6 @@ export default function VideoPlayerScreen() {
     }
   }, [videoId, videoData]);
 
-  const markAsCompleted = useCallback(async () => {
-    if (!videoId || !videoData || hasAutoCompletedRef.current) return;
-
-    try {
-      console.log('[VideoPlayer] Marking video as completed');
-      
-      const { error } = await supabase
-        .from('user_video_progress')
-        .upsert({
-          creator_handle: CREATOR_HANDLE,
-          video_id: videoId,
-          watched_seconds: videoData.duration_seconds || 0,
-          completed: true,
-          completed_at: new Date().toISOString(),
-          last_watched_at: new Date().toISOString(),
-        }, {
-          onConflict: 'creator_handle,video_id',
-        });
-
-      if (error) {
-        console.error('[VideoPlayer] Error marking as completed:', error);
-        return;
-      }
-
-      hasAutoCompletedRef.current = true;
-      setIsCompleted(true);
-      setProgressPercentage(100);
-      
-      console.log('[VideoPlayer] Video marked as completed');
-      
-      Alert.alert(
-        'Congratulations! 🎉',
-        'You have completed this video! The next lesson is now unlocked.',
-        [
-          {
-            text: 'Continue Learning',
-            onPress: () => router.back(),
-          },
-        ]
-      );
-    } catch (error: any) {
-      console.error('[VideoPlayer] Exception marking as completed:', error);
-    }
-  }, [videoId, videoData]);
-
   useEffect(() => {
     fetchVideoData();
     return () => {
@@ -193,12 +146,6 @@ export default function VideoPlayerScreen() {
         if (currentTime % 5 === 0 && currentTime > 0) {
           updateProgress(currentTime);
         }
-
-        // Auto-complete when reaching 90% or more
-        if (percentage >= 90 && !hasAutoCompletedRef.current && !isCompleted) {
-          console.log('[VideoPlayer] Video reached 90%, auto-completing...');
-          markAsCompleted();
-        }
       }, 1000);
 
       return () => {
@@ -211,7 +158,7 @@ export default function VideoPlayerScreen() {
         }
       };
     }
-  }, [player, videoData, isCompleted, updateProgress, markAsCompleted]);
+  }, [player, videoData, updateProgress]);
 
   if (loading || !fontsLoaded) {
     return (
@@ -304,34 +251,32 @@ export default function VideoPlayerScreen() {
                     size={16}
                     color={colors.success}
                   />
-                  <Text style={styles.completedText}>Completed</Text>
+                  <Text style={styles.completedText}>Watched</Text>
                 </View>
               )}
             </View>
           </View>
 
-          {!isCompleted && progressPercentage < 90 && (
-            <View style={styles.infoBox}>
-              <IconSymbol
-                ios_icon_name="info.circle"
-                android_material_icon_name="info-outline"
-                size={20}
-                color={colors.primary}
-              />
-              <Text style={styles.infoBoxText}>
-                Watch at least 90% to complete this lesson
-              </Text>
-            </View>
-          )}
+          <View style={styles.infoBox}>
+            <IconSymbol
+              ios_icon_name="info.circle"
+              android_material_icon_name="info-outline"
+              size={20}
+              color={colors.primary}
+            />
+            <Text style={styles.infoBoxText}>
+              This video has been marked as watched. Continue learning!
+            </Text>
+          </View>
 
           <View style={styles.buttonContainer}>
             <TouchableOpacity
-              style={[styles.backButton, isCompleted && styles.backButtonPrimary]}
+              style={styles.backButton}
               onPress={() => router.back()}
               activeOpacity={0.7}
             >
-              <Text style={[styles.backButtonText, isCompleted && styles.backButtonTextPrimary]}>
-                {isCompleted ? 'Continue Learning' : 'Back to Academy'}
+              <Text style={styles.backButtonText}>
+                Back to Academy
               </Text>
             </TouchableOpacity>
           </View>
@@ -464,23 +409,14 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   backButton: {
-    backgroundColor: colors.backgroundAlt,
+    backgroundColor: colors.primary,
     borderRadius: 16,
     padding: 16,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.primary,
-  },
-  backButtonPrimary: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
   },
   backButtonText: {
     fontSize: 16,
     fontFamily: 'Poppins_700Bold',
-    color: colors.primary,
-  },
-  backButtonTextPrimary: {
     color: '#FFFFFF',
   },
 });

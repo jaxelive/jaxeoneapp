@@ -370,27 +370,6 @@ export default function AcademyScreen() {
     setExpandedCourseId(expandedCourseId === courseId ? null : courseId);
   };
 
-  const isItemUnlocked = (course: Course, index: number): boolean => {
-    // First item is always unlocked
-    if (index === 0) return true;
-
-    // Check if previous item is completed
-    const previousItem = course.contentItems[index - 1];
-    if (!previousItem) return false;
-
-    if (previousItem.content_type === 'video' && previousItem.video) {
-      const progress = videoProgress.find((p) => p.video_id === previousItem.video!.id);
-      return progress?.completed || false;
-    }
-
-    if (previousItem.content_type === 'quiz' && previousItem.quiz) {
-      const attempt = quizAttempts.find((a) => a.quiz_id === previousItem.quiz!.id);
-      return attempt?.passed || false;
-    }
-
-    return false;
-  };
-
   const isItemCompleted = (item: ContentItem): boolean => {
     if (item.content_type === 'video' && item.video) {
       const progress = videoProgress.find((p) => p.video_id === item.video!.id);
@@ -409,14 +388,49 @@ export default function AcademyScreen() {
     return videoProgress.find((p) => p.video_id === videoId);
   };
 
-  const handleItemPress = (course: Course, item: ContentItem, index: number) => {
-    if (!isItemUnlocked(course, index)) {
-      Alert.alert('Locked', 'Complete the previous lesson to unlock this one');
-      return;
-    }
-
+  const handleItemPress = async (course: Course, item: ContentItem, index: number) => {
     if (item.content_type === 'video' && item.video) {
       console.log('[Academy] Opening video:', item.video.id);
+      
+      // Mark video as watched immediately when opened
+      try {
+        const { error } = await supabase
+          .from('user_video_progress')
+          .upsert({
+            creator_handle: CREATOR_HANDLE,
+            video_id: item.video.id,
+            watched_seconds: 0,
+            completed: true,
+            completed_at: new Date().toISOString(),
+            last_watched_at: new Date().toISOString(),
+          }, {
+            onConflict: 'creator_handle,video_id',
+          });
+
+        if (!error) {
+          // Update local state
+          setVideoProgress(prev => {
+            const existing = prev.find(p => p.video_id === item.video!.id);
+            if (existing) {
+              return prev.map(p => 
+                p.video_id === item.video!.id 
+                  ? { ...p, completed: true, progress_percentage: 100 }
+                  : p
+              );
+            } else {
+              return [...prev, {
+                video_id: item.video!.id,
+                completed: true,
+                watched_seconds: 0,
+                progress_percentage: 100,
+              }];
+            }
+          });
+        }
+      } catch (error) {
+        console.error('[Academy] Error marking video as watched:', error);
+      }
+
       router.push({
         pathname: '/(tabs)/video-player',
         params: { 
@@ -428,6 +442,37 @@ export default function AcademyScreen() {
       });
     } else if (item.content_type === 'quiz' && item.quiz) {
       console.log('[Academy] Opening quiz:', item.quiz.id);
+      
+      // Mark quiz as opened/completed immediately
+      try {
+        const { error } = await supabase
+          .from('user_quiz_attempts')
+          .insert({
+            creator_handle: CREATOR_HANDLE,
+            quiz_id: item.quiz.id,
+            score: 100,
+            passed: true,
+            answers: {},
+          });
+
+        if (!error) {
+          // Update local state
+          setQuizAttempts(prev => {
+            const existing = prev.find(a => a.quiz_id === item.quiz!.id);
+            if (!existing) {
+              return [...prev, {
+                quiz_id: item.quiz!.id,
+                passed: true,
+                score: 100,
+              }];
+            }
+            return prev;
+          });
+        }
+      } catch (error) {
+        console.error('[Academy] Error marking quiz as completed:', error);
+      }
+
       Alert.alert('Quiz', `Starting quiz: ${item.quiz.title}\n\nQuiz would open here.`);
     }
   };
@@ -436,6 +481,19 @@ export default function AcademyScreen() {
     const completedItems = course.contentItems.filter(item => isItemCompleted(item)).length;
     const totalItems = course.contentItems.length;
     return { completed: completedItems, total: totalItems };
+  };
+
+  const getVideoNumber = (course: Course, item: ContentItem): number => {
+    let videoCount = 0;
+    for (const contentItem of course.contentItems) {
+      if (contentItem.content_type === 'video') {
+        videoCount++;
+        if (contentItem.id === item.id) {
+          return videoCount;
+        }
+      }
+    }
+    return 0;
   };
 
   if (loading || !fontsLoaded) {
@@ -679,11 +737,11 @@ export default function AcademyScreen() {
                         </View>
                       ) : (
                         course.contentItems.map((item, index) => {
-                          const isUnlocked = isItemUnlocked(course, index);
                           const isCompleted = isItemCompleted(item);
                           const progress = item.content_type === 'video' && item.video 
                             ? getVideoProgress(item.video.id)
                             : undefined;
+                          const videoNumber = item.content_type === 'video' ? getVideoNumber(course, item) : 0;
 
                           return (
                             <TouchableOpacity
@@ -691,84 +749,40 @@ export default function AcademyScreen() {
                               style={[
                                 styles.contentCard,
                                 isCompleted && styles.contentCardCompleted,
-                                !isUnlocked && styles.contentCardLocked,
                               ]}
                               onPress={() => handleItemPress(course, item, index)}
-                              disabled={!isUnlocked}
                               activeOpacity={0.7}
                             >
-                              {item.content_type === 'video' && item.video && (
-                                <View style={styles.videoThumbnailContainer}>
-                                  {item.video.thumbnail_url ? (
-                                    <Image
-                                      source={{ uri: item.video.thumbnail_url }}
-                                      style={styles.videoThumbnailImage}
-                                    />
-                                  ) : (
-                                    <View style={styles.videoThumbnailPlaceholder}>
-                                      <IconSymbol
-                                        ios_icon_name="play.circle.fill"
-                                        android_material_icon_name="play-circle"
-                                        size={40}
-                                        color={isUnlocked ? colors.primary : '#707070'}
-                                      />
-                                    </View>
-                                  )}
-                                  {!isUnlocked && (
-                                    <View style={styles.lockedOverlay}>
-                                      <IconSymbol
-                                        ios_icon_name="lock.fill"
-                                        android_material_icon_name="lock"
-                                        size={24}
-                                        color="#FFFFFF"
-                                      />
-                                    </View>
-                                  )}
-                                  {isCompleted && (
-                                    <View style={styles.completedBadge}>
-                                      <IconSymbol
-                                        ios_icon_name="checkmark.circle.fill"
-                                        android_material_icon_name="check-circle"
-                                        size={24}
-                                        color={colors.success}
-                                      />
-                                    </View>
-                                  )}
-                                </View>
-                              )}
-
-                              {item.content_type === 'quiz' && (
-                                <View style={styles.contentIcon}>
+                              {/* Circle indicator for videos and quizzes */}
+                              <View style={styles.contentIndicatorContainer}>
+                                <View style={[
+                                  styles.contentIndicatorCircle,
+                                  isCompleted && styles.contentIndicatorCircleCompleted,
+                                ]}>
                                   {isCompleted ? (
                                     <IconSymbol
-                                      ios_icon_name="checkmark.circle.fill"
-                                      android_material_icon_name="check-circle"
-                                      size={40}
-                                      color={colors.success}
+                                      ios_icon_name="checkmark"
+                                      android_material_icon_name="check"
+                                      size={20}
+                                      color="#FFFFFF"
                                     />
-                                  ) : !isUnlocked ? (
-                                    <IconSymbol
-                                      ios_icon_name="lock.fill"
-                                      android_material_icon_name="lock"
-                                      size={32}
-                                      color="#707070"
-                                    />
+                                  ) : item.content_type === 'video' ? (
+                                    <Text style={styles.contentIndicatorNumber}>
+                                      {videoNumber}
+                                    </Text>
                                   ) : (
-                                    <IconSymbol
-                                      ios_icon_name="doc.text.fill"
-                                      android_material_icon_name="quiz"
-                                      size={40}
-                                      color={colors.primary}
-                                    />
+                                    <Text style={styles.contentIndicatorQuizText}>
+                                      Quiz
+                                    </Text>
                                   )}
                                 </View>
-                              )}
+                              </View>
 
                               <View style={styles.contentInfo}>
                                 <View style={styles.contentHeader}>
-                                  <Text style={[styles.contentTitle, !isUnlocked && styles.contentTitleLocked]}>
+                                  <Text style={styles.contentTitle}>
                                     {item.content_type === 'video'
-                                      ? `${index + 1}. ${item.video?.title}`
+                                      ? item.video?.title
                                       : item.quiz?.title}
                                   </Text>
                                   {item.content_type === 'quiz' && item.quiz?.is_required && (
@@ -780,30 +794,11 @@ export default function AcademyScreen() {
                                 
                                 {item.content_type === 'video' && item.video?.description && (
                                   <Text
-                                    style={[
-                                      styles.contentDescription,
-                                      !isUnlocked && styles.contentDescriptionLocked,
-                                    ]}
+                                    style={styles.contentDescription}
                                     numberOfLines={2}
                                   >
                                     {item.video.description}
                                   </Text>
-                                )}
-                                
-                                {item.content_type === 'video' && progress && (
-                                  <View style={styles.videoProgressContainer}>
-                                    <View style={styles.videoProgressBar}>
-                                      <View
-                                        style={[
-                                          styles.videoProgressFill,
-                                          { width: `${progress.progress_percentage}%` },
-                                        ]}
-                                      />
-                                    </View>
-                                    <Text style={styles.videoProgressText}>
-                                      {progress.progress_percentage}% complete
-                                    </Text>
-                                  </View>
                                 )}
                                 
                                 {item.content_type === 'video' && item.video?.duration_seconds && (
@@ -814,33 +809,22 @@ export default function AcademyScreen() {
                                 
                                 {item.content_type === 'quiz' && item.quiz?.description && (
                                   <Text
-                                    style={[
-                                      styles.contentDescription,
-                                      !isUnlocked && styles.contentDescriptionLocked,
-                                    ]}
+                                    style={styles.contentDescription}
                                     numberOfLines={2}
                                   >
                                     {item.quiz.description}
                                   </Text>
                                 )}
-                                
-                                {!isUnlocked && (
-                                  <Text style={styles.lockedMessage}>
-                                    Complete the previous lesson to unlock
-                                  </Text>
-                                )}
                               </View>
 
-                              {isUnlocked && !isCompleted && (
-                                <View style={styles.contentArrow}>
-                                  <IconSymbol
-                                    ios_icon_name="chevron.right"
-                                    android_material_icon_name="chevron-right"
-                                    size={20}
-                                    color="#A0A0A0"
-                                  />
-                                </View>
-                              )}
+                              <View style={styles.contentArrow}>
+                                <IconSymbol
+                                  ios_icon_name="chevron.right"
+                                  android_material_icon_name="chevron-right"
+                                  size={20}
+                                  color="#A0A0A0"
+                                />
+                              </View>
                             </TouchableOpacity>
                           );
                         })
@@ -865,7 +849,7 @@ export default function AcademyScreen() {
             color={colors.primary}
           />
           <Text style={styles.infoText}>
-            Complete videos in order to unlock the next lesson. Videos are marked complete when you watch 90% or more.
+            All videos and quizzes are available immediately. Complete them in any order to track your progress!
           </Text>
         </View>
       </ScrollView>
@@ -1135,56 +1119,45 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: colors.background,
     borderRadius: 16,
-    padding: 12,
+    padding: 16,
     alignItems: 'center',
-    gap: 12,
+    gap: 16,
   },
   contentCardCompleted: {
     backgroundColor: 'rgba(102, 66, 239, 0.1)',
     borderWidth: 2,
     borderColor: colors.primary,
   },
-  contentCardLocked: {
-    opacity: 0.5,
+  contentIndicatorContainer: {
+    width: 56,
+    height: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  videoThumbnailContainer: {
-    width: 100,
-    height: 70,
-    borderRadius: 12,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  videoThumbnailImage: {
-    width: '100%',
-    height: '100%',
-  },
-  videoThumbnailPlaceholder: {
-    width: '100%',
-    height: '100%',
+  contentIndicatorCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: colors.grey,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.primary,
   },
-  lockedOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  contentIndicatorCircleCompleted: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
-  completedBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
+  contentIndicatorNumber: {
+    fontSize: 24,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.text,
   },
-  contentIcon: {
-    width: 48,
-    height: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
+  contentIndicatorQuizText: {
+    fontSize: 12,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.text,
+    textAlign: 'center',
   },
   contentInfo: {
     flex: 1,
@@ -1200,9 +1173,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_600SemiBold',
     color: colors.text,
     flex: 1,
-  },
-  contentTitleLocked: {
-    color: colors.textSecondary,
   },
   requiredBadge: {
     backgroundColor: colors.primary,
@@ -1223,40 +1193,10 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 4,
   },
-  contentDescriptionLocked: {
-    color: colors.textTertiary,
-  },
-  videoProgressContainer: {
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  videoProgressBar: {
-    height: 4,
-    backgroundColor: colors.grey,
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: 4,
-  },
-  videoProgressFill: {
-    height: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: 4,
-  },
-  videoProgressText: {
-    fontSize: 11,
-    fontFamily: 'Poppins_500Medium',
-    color: colors.primary,
-  },
   videoDuration: {
     fontSize: 12,
     fontFamily: 'Poppins_500Medium',
     color: colors.primary,
-  },
-  lockedMessage: {
-    fontSize: 12,
-    fontFamily: 'Poppins_500Medium',
-    color: colors.error,
-    marginTop: 4,
   },
   contentArrow: {
     width: 24,
