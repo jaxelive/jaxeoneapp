@@ -86,6 +86,7 @@ export default function ProfileScreen() {
   const handleSave = async () => {
     if (!creator) {
       console.error('[Profile] No creator data available');
+      Alert.alert('Error', 'No creator data available');
       return;
     }
 
@@ -128,6 +129,8 @@ export default function ProfileScreen() {
         } catch (uploadError) {
           console.error('[Profile] Profile picture upload error:', uploadError);
           Alert.alert('Upload Error', 'Failed to upload profile picture. Please try again.');
+          setIsSaving(false);
+          setIsUploadingProfilePic(false);
           return;
         } finally {
           setIsUploadingProfilePic(false);
@@ -161,6 +164,14 @@ export default function ProfileScreen() {
         Alert.alert('Error', `Failed to update profile: ${error.message}`);
       } else {
         console.log('[Profile] Profile updated successfully:', data);
+        
+        // Verify the update
+        if (data && data.length > 0) {
+          console.log('[Profile] Updated data from database:', {
+            profile_picture_url: data[0].profile_picture_url,
+            avatar_url: data[0].avatar_url,
+          });
+        }
         
         // Clear image cache
         if (uploadedImageUrl) {
