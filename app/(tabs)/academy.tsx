@@ -409,55 +409,6 @@ export default function AcademyScreen() {
     return videoProgress.find((p) => p.video_id === videoId);
   };
 
-  const handleMarkAsCompleted = async (videoId: string) => {
-    try {
-      console.log('[Academy] Marking video as completed:', videoId);
-      
-      const { error } = await supabase
-        .from('user_video_progress')
-        .upsert({
-          creator_handle: CREATOR_HANDLE,
-          video_id: videoId,
-          watched_seconds: 0,
-          completed: true,
-          completed_at: new Date().toISOString(),
-          last_watched_at: new Date().toISOString(),
-        }, {
-          onConflict: 'creator_handle,video_id',
-        });
-
-      if (error) {
-        console.error('[Academy] Error marking as completed:', error);
-        Alert.alert('Error', 'Failed to mark video as completed');
-        return;
-      }
-
-      // Update local state
-      setVideoProgress(prev => {
-        const existing = prev.find(p => p.video_id === videoId);
-        if (existing) {
-          return prev.map(p => 
-            p.video_id === videoId 
-              ? { ...p, completed: true, progress_percentage: 100 }
-              : p
-          );
-        } else {
-          return [...prev, {
-            video_id: videoId,
-            completed: true,
-            watched_seconds: 0,
-            progress_percentage: 100,
-          }];
-        }
-      });
-
-      Alert.alert('Success', 'Video marked as completed!');
-    } catch (error: any) {
-      console.error('[Academy] Exception marking as completed:', error);
-      Alert.alert('Error', 'An unexpected error occurred');
-    }
-  };
-
   const handleItemPress = (course: Course, item: ContentItem, index: number) => {
     if (!isItemUnlocked(course, index)) {
       Alert.alert('Locked', 'Complete the previous lesson to unlock this one');
@@ -735,182 +686,162 @@ export default function AcademyScreen() {
                             : undefined;
 
                           return (
-                            <View key={item.id} style={styles.contentCardWrapper}>
-                              <TouchableOpacity
-                                style={[
-                                  styles.contentCard,
-                                  isCompleted && styles.contentCardCompleted,
-                                  !isUnlocked && styles.contentCardLocked,
-                                ]}
-                                onPress={() => handleItemPress(course, item, index)}
-                                disabled={!isUnlocked}
-                                activeOpacity={0.7}
-                              >
-                                {item.content_type === 'video' && item.video && (
-                                  <View style={styles.videoThumbnailContainer}>
-                                    {item.video.thumbnail_url ? (
-                                      <Image
-                                        source={{ uri: item.video.thumbnail_url }}
-                                        style={styles.videoThumbnailImage}
-                                      />
-                                    ) : (
-                                      <View style={styles.videoThumbnailPlaceholder}>
-                                        <IconSymbol
-                                          ios_icon_name="play.circle.fill"
-                                          android_material_icon_name="play-circle"
-                                          size={40}
-                                          color={isUnlocked ? colors.primary : '#707070'}
-                                        />
-                                      </View>
-                                    )}
-                                    {!isUnlocked && (
-                                      <View style={styles.lockedOverlay}>
-                                        <IconSymbol
-                                          ios_icon_name="lock.fill"
-                                          android_material_icon_name="lock"
-                                          size={24}
-                                          color="#FFFFFF"
-                                        />
-                                      </View>
-                                    )}
-                                    {isCompleted && (
-                                      <View style={styles.completedBadge}>
-                                        <IconSymbol
-                                          ios_icon_name="checkmark.circle.fill"
-                                          android_material_icon_name="check-circle"
-                                          size={24}
-                                          color={colors.success}
-                                        />
-                                      </View>
-                                    )}
-                                  </View>
-                                )}
-
-                                {item.content_type === 'quiz' && (
-                                  <View style={styles.contentIcon}>
-                                    {isCompleted ? (
+                            <TouchableOpacity
+                              key={item.id}
+                              style={[
+                                styles.contentCard,
+                                isCompleted && styles.contentCardCompleted,
+                                !isUnlocked && styles.contentCardLocked,
+                              ]}
+                              onPress={() => handleItemPress(course, item, index)}
+                              disabled={!isUnlocked}
+                              activeOpacity={0.7}
+                            >
+                              {item.content_type === 'video' && item.video && (
+                                <View style={styles.videoThumbnailContainer}>
+                                  {item.video.thumbnail_url ? (
+                                    <Image
+                                      source={{ uri: item.video.thumbnail_url }}
+                                      style={styles.videoThumbnailImage}
+                                    />
+                                  ) : (
+                                    <View style={styles.videoThumbnailPlaceholder}>
                                       <IconSymbol
-                                        ios_icon_name="checkmark.circle.fill"
-                                        android_material_icon_name="check-circle"
+                                        ios_icon_name="play.circle.fill"
+                                        android_material_icon_name="play-circle"
                                         size={40}
-                                        color={colors.success}
+                                        color={isUnlocked ? colors.primary : '#707070'}
                                       />
-                                    ) : !isUnlocked ? (
+                                    </View>
+                                  )}
+                                  {!isUnlocked && (
+                                    <View style={styles.lockedOverlay}>
                                       <IconSymbol
                                         ios_icon_name="lock.fill"
                                         android_material_icon_name="lock"
-                                        size={32}
-                                        color="#707070"
+                                        size={24}
+                                        color="#FFFFFF"
                                       />
-                                    ) : (
-                                      <IconSymbol
-                                        ios_icon_name="doc.text.fill"
-                                        android_material_icon_name="quiz"
-                                        size={40}
-                                        color={colors.primary}
-                                      />
-                                    )}
-                                  </View>
-                                )}
-
-                                <View style={styles.contentInfo}>
-                                  <View style={styles.contentHeader}>
-                                    <Text style={[styles.contentTitle, !isUnlocked && styles.contentTitleLocked]}>
-                                      {item.content_type === 'video'
-                                        ? `${index + 1}. ${item.video?.title}`
-                                        : item.quiz?.title}
-                                    </Text>
-                                    {item.content_type === 'quiz' && item.quiz?.is_required && (
-                                      <View style={styles.requiredBadge}>
-                                        <Text style={styles.requiredBadgeText}>REQUIRED</Text>
-                                      </View>
-                                    )}
-                                  </View>
-                                  
-                                  {item.content_type === 'video' && item.video?.description && (
-                                    <Text
-                                      style={[
-                                        styles.contentDescription,
-                                        !isUnlocked && styles.contentDescriptionLocked,
-                                      ]}
-                                      numberOfLines={2}
-                                    >
-                                      {item.video.description}
-                                    </Text>
-                                  )}
-                                  
-                                  {item.content_type === 'video' && progress && (
-                                    <View style={styles.videoProgressContainer}>
-                                      <View style={styles.videoProgressBar}>
-                                        <View
-                                          style={[
-                                            styles.videoProgressFill,
-                                            { width: `${progress.progress_percentage}%` },
-                                          ]}
-                                        />
-                                      </View>
-                                      <Text style={styles.videoProgressText}>
-                                        {progress.progress_percentage}% complete
-                                      </Text>
                                     </View>
                                   )}
-                                  
-                                  {item.content_type === 'video' && item.video?.duration_seconds && (
-                                    <Text style={styles.videoDuration}>
-                                      {Math.floor(item.video.duration_seconds / 60)} min
-                                    </Text>
-                                  )}
-                                  
-                                  {item.content_type === 'quiz' && item.quiz?.description && (
-                                    <Text
-                                      style={[
-                                        styles.contentDescription,
-                                        !isUnlocked && styles.contentDescriptionLocked,
-                                      ]}
-                                      numberOfLines={2}
-                                    >
-                                      {item.quiz.description}
-                                    </Text>
-                                  )}
-                                  
-                                  {!isUnlocked && (
-                                    <Text style={styles.lockedMessage}>
-                                      Complete the previous lesson to unlock
-                                    </Text>
+                                  {isCompleted && (
+                                    <View style={styles.completedBadge}>
+                                      <IconSymbol
+                                        ios_icon_name="checkmark.circle.fill"
+                                        android_material_icon_name="check-circle"
+                                        size={24}
+                                        color={colors.success}
+                                      />
+                                    </View>
                                   )}
                                 </View>
+                              )}
 
-                                {isUnlocked && !isCompleted && (
-                                  <View style={styles.contentArrow}>
+                              {item.content_type === 'quiz' && (
+                                <View style={styles.contentIcon}>
+                                  {isCompleted ? (
                                     <IconSymbol
-                                      ios_icon_name="chevron.right"
-                                      android_material_icon_name="chevron-right"
-                                      size={20}
-                                      color="#A0A0A0"
+                                      ios_icon_name="checkmark.circle.fill"
+                                      android_material_icon_name="check-circle"
+                                      size={40}
+                                      color={colors.success}
                                     />
+                                  ) : !isUnlocked ? (
+                                    <IconSymbol
+                                      ios_icon_name="lock.fill"
+                                      android_material_icon_name="lock"
+                                      size={32}
+                                      color="#707070"
+                                    />
+                                  ) : (
+                                    <IconSymbol
+                                      ios_icon_name="doc.text.fill"
+                                      android_material_icon_name="quiz"
+                                      size={40}
+                                      color={colors.primary}
+                                    />
+                                  )}
+                                </View>
+                              )}
+
+                              <View style={styles.contentInfo}>
+                                <View style={styles.contentHeader}>
+                                  <Text style={[styles.contentTitle, !isUnlocked && styles.contentTitleLocked]}>
+                                    {item.content_type === 'video'
+                                      ? `${index + 1}. ${item.video?.title}`
+                                      : item.quiz?.title}
+                                  </Text>
+                                  {item.content_type === 'quiz' && item.quiz?.is_required && (
+                                    <View style={styles.requiredBadge}>
+                                      <Text style={styles.requiredBadgeText}>REQUIRED</Text>
+                                    </View>
+                                  )}
+                                </View>
+                                
+                                {item.content_type === 'video' && item.video?.description && (
+                                  <Text
+                                    style={[
+                                      styles.contentDescription,
+                                      !isUnlocked && styles.contentDescriptionLocked,
+                                    ]}
+                                    numberOfLines={2}
+                                  >
+                                    {item.video.description}
+                                  </Text>
+                                )}
+                                
+                                {item.content_type === 'video' && progress && (
+                                  <View style={styles.videoProgressContainer}>
+                                    <View style={styles.videoProgressBar}>
+                                      <View
+                                        style={[
+                                          styles.videoProgressFill,
+                                          { width: `${progress.progress_percentage}%` },
+                                        ]}
+                                      />
+                                    </View>
+                                    <Text style={styles.videoProgressText}>
+                                      {progress.progress_percentage}% complete
+                                    </Text>
                                   </View>
                                 )}
-                              </TouchableOpacity>
-                              
-                              {/* Test Mode: Mark as Completed Button */}
-                              {item.content_type === 'video' && item.video && isUnlocked && !isCompleted && (
-                                <TouchableOpacity
-                                  style={styles.markCompleteButton}
-                                  onPress={() => handleMarkAsCompleted(item.video!.id)}
-                                  activeOpacity={0.7}
-                                >
-                                  <IconSymbol
-                                    ios_icon_name="checkmark.circle"
-                                    android_material_icon_name="check-circle-outline"
-                                    size={16}
-                                    color={colors.primary}
-                                  />
-                                  <Text style={styles.markCompleteButtonText}>
-                                    Mark as Completed (Test)
+                                
+                                {item.content_type === 'video' && item.video?.duration_seconds && (
+                                  <Text style={styles.videoDuration}>
+                                    {Math.floor(item.video.duration_seconds / 60)} min
                                   </Text>
-                                </TouchableOpacity>
+                                )}
+                                
+                                {item.content_type === 'quiz' && item.quiz?.description && (
+                                  <Text
+                                    style={[
+                                      styles.contentDescription,
+                                      !isUnlocked && styles.contentDescriptionLocked,
+                                    ]}
+                                    numberOfLines={2}
+                                  >
+                                    {item.quiz.description}
+                                  </Text>
+                                )}
+                                
+                                {!isUnlocked && (
+                                  <Text style={styles.lockedMessage}>
+                                    Complete the previous lesson to unlock
+                                  </Text>
+                                )}
+                              </View>
+
+                              {isUnlocked && !isCompleted && (
+                                <View style={styles.contentArrow}>
+                                  <IconSymbol
+                                    ios_icon_name="chevron.right"
+                                    android_material_icon_name="chevron-right"
+                                    size={20}
+                                    color="#A0A0A0"
+                                  />
+                                </View>
                               )}
-                            </View>
+                            </TouchableOpacity>
                           );
                         })
                       )}
@@ -934,7 +865,7 @@ export default function AcademyScreen() {
             color={colors.primary}
           />
           <Text style={styles.infoText}>
-            Complete videos in order to unlock the next lesson. Videos are marked complete when you watch 90% or more, or you can manually mark them for testing.
+            Complete videos in order to unlock the next lesson. Videos are marked complete when you watch 90% or more.
           </Text>
         </View>
       </ScrollView>
@@ -1200,9 +1131,6 @@ const styles = StyleSheet.create({
   courseContent: {
     gap: 12,
   },
-  contentCardWrapper: {
-    gap: 8,
-  },
   contentCard: {
     flexDirection: 'row',
     backgroundColor: colors.background,
@@ -1335,22 +1263,6 @@ const styles = StyleSheet.create({
     height: 24,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  markCompleteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(102, 66, 239, 0.1)',
-    borderRadius: 12,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  markCompleteButtonText: {
-    fontSize: 13,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.primary,
   },
   infoCard: {
     flexDirection: 'row',

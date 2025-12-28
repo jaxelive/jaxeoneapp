@@ -169,27 +169,6 @@ export default function VideoPlayerScreen() {
     }
   }, [videoId, videoData]);
 
-  const handleManualComplete = useCallback(async () => {
-    if (!videoId || !videoData) return;
-
-    Alert.alert(
-      'Mark as Completed',
-      'Are you sure you want to mark this video as completed?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Mark Complete',
-          onPress: async () => {
-            await markAsCompleted();
-          },
-        },
-      ]
-    );
-  }, [videoId, videoData, markAsCompleted]);
-
   useEffect(() => {
     fetchVideoData();
     return () => {
@@ -346,24 +325,6 @@ export default function VideoPlayerScreen() {
           )}
 
           <View style={styles.buttonContainer}>
-            {!isCompleted && (
-              <TouchableOpacity
-                style={styles.markCompleteButton}
-                onPress={handleManualComplete}
-                activeOpacity={0.7}
-              >
-                <IconSymbol
-                  ios_icon_name="checkmark.circle"
-                  android_material_icon_name="check-circle-outline"
-                  size={20}
-                  color="#FFFFFF"
-                />
-                <Text style={styles.markCompleteButtonText}>
-                  Mark as Completed (Test)
-                </Text>
-              </TouchableOpacity>
-            )}
-            
             <TouchableOpacity
               style={[styles.backButton, isCompleted && styles.backButtonPrimary]}
               onPress={() => router.back()}
@@ -501,20 +462,6 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     gap: 12,
-  },
-  markCompleteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.primary,
-    borderRadius: 16,
-    padding: 16,
-  },
-  markCompleteButtonText: {
-    fontSize: 16,
-    fontFamily: 'Poppins_700Bold',
-    color: '#FFFFFF',
   },
   backButton: {
     backgroundColor: colors.backgroundAlt,
