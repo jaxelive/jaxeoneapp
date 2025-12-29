@@ -12,7 +12,6 @@ import {
 import { Stack } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/app/integrations/supabase/client';
-import { useSupabase } from '@/contexts/SupabaseContext';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 
@@ -50,8 +49,10 @@ interface UserChallenge {
   status: string;
 }
 
+// Hardcoded creator handle - no authentication needed for testing
+const CREATOR_HANDLE = 'avelezsanti';
+
 export default function ChallengeListScreen() {
-  const { user, session } = useSupabase();
   const [fontsLoaded] = useFonts({
     Poppins_400Regular,
     Poppins_500Medium,
@@ -75,14 +76,9 @@ export default function ChallengeListScreen() {
   }, []);
 
   const fetchChallengeData = useCallback(async () => {
-    if (!user) {
-      console.log('[Challenge] No authenticated user');
-      return;
-    }
-
     try {
       setLoading(true);
-      console.log('[Challenge] Fetching challenge data for user:', user.email);
+      console.log('[Challenge] Fetching challenge data for creator:', CREATOR_HANDLE);
 
       // Fetch challenge info (with dynamic total_days)
       const { data: challengeData, error: challengeError } = await supabase
@@ -111,11 +107,11 @@ export default function ChallengeListScreen() {
       console.log('[Challenge] Challenge days loaded:', daysData?.length);
       setChallengeDays(daysData || []);
 
-      // Fetch user challenge
+      // Fetch user challenge using creator_handle
       const { data: userChallengeData, error: userChallengeError } = await supabase
         .from('user_challenge_progress')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('creator_handle', CREATOR_HANDLE)
         .eq('challenge_id', challengeData.id)
         .maybeSingle();
 
@@ -125,11 +121,11 @@ export default function ChallengeListScreen() {
       console.log('[Challenge] User challenge status:', userChallengeData?.status || 'Not started');
       setUserChallenge(userChallengeData);
 
-      // Fetch user progress
+      // Fetch user progress using creator_handle
       const { data: progressData, error: progressError } = await supabase
         .from('user_day_progress')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('creator_handle', CREATOR_HANDLE)
         .eq('challenge_id', challengeData.id)
         .order('day_number', { ascending: true });
 
@@ -145,15 +141,11 @@ export default function ChallengeListScreen() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, []);
 
   useEffect(() => {
-    if (user) {
-      fetchChallengeData();
-    } else {
-      setLoading(false);
-    }
-  }, [user, fetchChallengeData]);
+    fetchChallengeData();
+  }, [fetchChallengeData]);
 
   const getDayStatus = (dayNumber: number): 'locked' | 'active' | 'missed' | 'completed' | 'skipped' => {
     const dayProgress = progress.find((p) => p.day_number === dayNumber);
@@ -257,14 +249,14 @@ export default function ChallengeListScreen() {
   };
 
   const handleStartChallenge = async () => {
-    if (!user || !challenge) {
-      console.error('[Challenge] Cannot start challenge: missing user or challenge');
+    if (!challenge) {
+      console.error('[Challenge] Cannot start challenge: missing challenge');
       Alert.alert('Error', 'Unable to start challenge. Please try again.');
       return;
     }
 
     try {
-      console.log('[Challenge] Starting challenge for user:', user.email);
+      console.log('[Challenge] Starting challenge for creator:', CREATOR_HANDLE);
       const now = new Date().toISOString();
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
@@ -275,18 +267,18 @@ export default function ChallengeListScreen() {
         throw new Error('Day 1 not found');
       }
 
-      // Create user challenge
+      // Create user challenge using creator_handle
       const { error: challengeError } = await supabase
         .from('user_challenge_progress')
         .upsert({
-          user_id: user.id,
+          creator_handle: CREATOR_HANDLE,
           challenge_id: challenge.id,
           status: 'in_progress',
           started_at: now,
           current_day: 1,
           completed_days: 0,
         }, {
-          onConflict: 'user_id,challenge_id',
+          onConflict: 'creator_handle,challenge_id',
         });
 
       if (challengeError) {
@@ -294,11 +286,11 @@ export default function ChallengeListScreen() {
         throw challengeError;
       }
 
-      // Create day 1 progress (using day_id for unique constraint)
+      // Create day 1 progress using creator_handle (using day_id for unique constraint)
       const { error: progressError } = await supabase
         .from('user_day_progress')
         .upsert({
-          user_id: user.id,
+          creator_handle: CREATOR_HANDLE,
           challenge_id: challenge.id,
           day_id: day1.id,
           day_number: 1,
@@ -308,7 +300,7 @@ export default function ChallengeListScreen() {
           user_marked_complete: false,
           admin_validated: false,
         }, {
-          onConflict: 'user_id,day_id',
+          onConflict: 'creator_handle,day_id',
         });
 
       if (progressError) {
@@ -327,7 +319,7 @@ export default function ChallengeListScreen() {
   };
 
   const handleCompleteDay = async (day: ChallengeDay) => {
-    if (!user || !challenge) return;
+    if (!challenge) return;
 
     const status = getDayStatus(day.day_number);
     if (status !== 'active' && status !== 'missed') return;
@@ -367,7 +359,7 @@ export default function ChallengeListScreen() {
           completed_days: completedCount,
           current_day: Math.min(day.day_number + 1, challenge.total_days),
         })
-        .eq('user_id', user.id)
+        .eq('creator_handle', CREATOR_HANDLE)
         .eq('challenge_id', challenge.id);
 
       // Unlock next day if exists
@@ -393,7 +385,7 @@ export default function ChallengeListScreen() {
             await supabase
               .from('user_day_progress')
               .insert({
-                user_id: user.id,
+                creator_handle: CREATOR_HANDLE,
                 challenge_id: challenge.id,
                 day_id: nextDay.id,
                 day_number: nextDay.day_number,
@@ -418,7 +410,7 @@ export default function ChallengeListScreen() {
   };
 
   const handleSkipDay = async (day: ChallengeDay) => {
-    if (!user || !challenge) return;
+    if (!challenge) return;
 
     const status = getDayStatus(day.day_number);
     if (status !== 'missed') return;
@@ -469,7 +461,7 @@ export default function ChallengeListScreen() {
             await supabase
               .from('user_day_progress')
               .insert({
-                user_id: user.id,
+                creator_handle: CREATOR_HANDLE,
                 challenge_id: challenge.id,
                 day_id: nextDay.id,
                 day_number: nextDay.day_number,
@@ -512,33 +504,6 @@ export default function ChallengeListScreen() {
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading challenge...</Text>
-        </View>
-      </View>
-    );
-  }
-
-  if (!user || !session) {
-    return (
-      <View style={styles.container}>
-        <Stack.Screen
-          options={{
-            title: 'Challenge',
-            headerShown: true,
-            headerStyle: { backgroundColor: colors.background },
-            headerTintColor: colors.text,
-          }}
-        />
-        <View style={styles.centerContent}>
-          <IconSymbol
-            ios_icon_name="person.crop.circle.badge.exclamationmark"
-            android_material_icon_name="person-off"
-            size={64}
-            color={colors.textSecondary}
-          />
-          <Text style={styles.errorText}>Authentication Required</Text>
-          <Text style={styles.errorSubtext}>
-            Please sign in to access the 21-Day Challenge
-          </Text>
         </View>
       </View>
     );

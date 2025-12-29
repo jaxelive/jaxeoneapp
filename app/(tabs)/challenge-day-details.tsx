@@ -10,7 +10,6 @@ import {
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/app/integrations/supabase/client';
-import { useCreatorData } from '@/hooks/useCreatorData';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 
@@ -24,9 +23,11 @@ interface ChallengeDayData {
   requires_admin_validation: boolean;
 }
 
+// Hardcoded creator handle - no authentication needed for testing
+const CREATOR_HANDLE = 'avelezsanti';
+
 export default function ChallengeDayDetailsScreen() {
   const { dayId, dayNumber } = useLocalSearchParams<{ dayId: string; dayNumber: string }>();
-  const { creator } = useCreatorData();
   const [fontsLoaded] = useFonts({
     Poppins_400Regular,
     Poppins_500Medium,
@@ -39,7 +40,7 @@ export default function ChallengeDayDetailsScreen() {
   const [loading, setLoading] = useState(true);
 
   const fetchDayData = useCallback(async () => {
-    if (!creator || !dayId) return;
+    if (!dayId) return;
 
     try {
       setLoading(true);
@@ -54,11 +55,11 @@ export default function ChallengeDayDetailsScreen() {
       if (dayError) throw dayError;
       setDayData(dayInfo);
 
-      // Check if day is completed
+      // Check if day is completed using creator_handle
       const { data: progressData, error: progressError } = await supabase
         .from('user_day_progress')
         .select('*')
-        .eq('user_id', creator.id)
+        .eq('creator_handle', CREATOR_HANDLE)
         .eq('day_number', parseInt(dayNumber))
         .single();
 
@@ -72,13 +73,11 @@ export default function ChallengeDayDetailsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [creator, dayId, dayNumber]);
+  }, [dayId, dayNumber]);
 
   useEffect(() => {
     fetchDayData();
-  }, [creator, dayId, dayNumber]);
-
-
+  }, [dayId, dayNumber]);
 
   if (loading || !fontsLoaded) {
     return (
