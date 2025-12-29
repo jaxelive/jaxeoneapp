@@ -15,10 +15,6 @@ interface SupabaseContextType {
 
 const SupabaseContext = createContext<SupabaseContextType | undefined>(undefined);
 
-// Known test account for development
-const TEST_EMAIL = 'avelezsanti@placeholder.com';
-const TEST_PASSWORD = 'test123456';
-
 export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -68,8 +64,8 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     console.log('[SupabaseContext] Initializing authentication');
     
-    // Check for existing session first
-    supabase.auth.getSession().then(async ({ data: { session: existingSession }, error }) => {
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session: existingSession }, error }) => {
       if (error) {
         console.error('[SupabaseContext] Error getting session:', error);
       }
@@ -78,31 +74,11 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         console.log('[SupabaseContext] Existing session found:', existingSession.user.email);
         setSession(existingSession);
         setUser(existingSession.user);
-        setLoading(false);
       } else {
-        console.log('[SupabaseContext] No existing session, attempting auto sign-in for development');
-        
-        // For development: Auto sign-in with test account
-        try {
-          const { data, error: signInError } = await supabase.auth.signInWithPassword({
-            email: TEST_EMAIL,
-            password: TEST_PASSWORD,
-          });
-
-          if (signInError) {
-            console.error('[SupabaseContext] Auto sign-in failed:', signInError);
-            console.log('[SupabaseContext] User needs to sign in manually');
-          } else if (data.session) {
-            console.log('[SupabaseContext] Auto sign-in successful');
-            setSession(data.session);
-            setUser(data.user);
-          }
-        } catch (err) {
-          console.error('[SupabaseContext] Auto sign-in error:', err);
-        }
-        
-        setLoading(false);
+        console.log('[SupabaseContext] No existing session found');
       }
+      
+      setLoading(false);
     });
 
     // Listen for auth changes
