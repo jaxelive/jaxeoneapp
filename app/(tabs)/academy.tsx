@@ -45,7 +45,6 @@ interface AcademyContentItem {
   video_url: string | null;
   thumbnail_url: string | null;
   stage_order: number;
-  quiz_questions: any[] | null;
 }
 
 interface ContentItem {
@@ -108,10 +107,7 @@ export default function AcademyScreen() {
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [academyVideos, setAcademyVideos] = useState<AcademyContentItem[]>([]);
-  const [academyQuizId, setAcademyQuizId] = useState<string | null>(null);
-  const [totalQuizQuestions, setTotalQuizQuestions] = useState<number>(0);
   const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null);
-  const [expandedAcademySection, setExpandedAcademySection] = useState<boolean>(true);
   const [videoProgress, setVideoProgress] = useState<VideoProgress[]>([]);
   const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
   const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
@@ -171,8 +167,8 @@ export default function AcademyScreen() {
         setRegistrations(registrationsData || []);
       }
 
-      // Fetch academy content from incubation_content table (Creator Journey)
-      console.log('[Academy] Fetching creator journey content from incubation_content...');
+      // Fetch academy content from incubation_content table (Creator Journey videos only)
+      console.log('[Academy] Fetching creator journey videos from incubation_content...');
       const { data: academyData, error: academyError } = await supabase
         .from('incubation_content')
         .select('*')
@@ -184,9 +180,8 @@ export default function AcademyScreen() {
       } else {
         console.log('[Academy] Creator journey content fetched:', academyData?.length || 0);
         
-        // Separate videos and collect all quiz questions
+        // Only get videos (quiz is now in the course)
         const videos: AcademyContentItem[] = [];
-        let allQuizQuestions: any[] = [];
         
         (academyData || []).forEach((item: any) => {
           // Add video if it exists
@@ -198,26 +193,12 @@ export default function AcademyScreen() {
               video_url: item.video_url,
               thumbnail_url: item.thumbnail_url,
               stage_order: item.stage_order,
-              quiz_questions: item.quiz_questions,
             });
-          }
-          
-          // Collect quiz questions
-          if (item.quiz_questions && Array.isArray(item.quiz_questions) && item.quiz_questions.length > 0) {
-            allQuizQuestions = allQuizQuestions.concat(item.quiz_questions);
           }
         });
         
         console.log('[Academy] Videos found:', videos.length);
-        console.log('[Academy] Total quiz questions collected:', allQuizQuestions.length);
-        
         setAcademyVideos(videos);
-        setTotalQuizQuestions(allQuizQuestions.length);
-        
-        // Use a special ID for the combined quiz
-        if (allQuizQuestions.length > 0) {
-          setAcademyQuizId('creator-journey-final-quiz');
-        }
       }
 
       // Fetch all courses
@@ -436,10 +417,6 @@ export default function AcademyScreen() {
     setExpandedCourseId(expandedCourseId === courseId ? null : courseId);
   };
 
-  const toggleAcademySection = () => {
-    setExpandedAcademySection(!expandedAcademySection);
-  };
-
   const isItemCompleted = (item: ContentItem): boolean => {
     if (item.content_type === 'video' && item.video) {
       const progress = videoProgress.find((p) => p.video_id === item.video!.id);
@@ -457,12 +434,6 @@ export default function AcademyScreen() {
   const isAcademyVideoCompleted = (videoId: string): boolean => {
     const progress = videoProgress.find((p) => p.video_id === videoId);
     return progress?.completed || false;
-  };
-
-  const isAcademyQuizCompleted = (): boolean => {
-    if (!academyQuizId) return false;
-    const attempt = quizAttempts.find((a) => a.quiz_id === academyQuizId);
-    return attempt?.passed || false;
   };
 
   const getVideoProgress = (videoId: string): VideoProgress | undefined => {
@@ -555,40 +526,10 @@ export default function AcademyScreen() {
     });
   };
 
-  const handleAcademyQuizPress = () => {
-    if (!academyQuizId) return;
-    
-    console.log('[Academy] Opening creator journey final quiz');
-    
-    try {
-      // Navigate to quiz screen with the special quiz ID
-      router.push({
-        pathname: '/(tabs)/quiz',
-        params: { 
-          quizId: academyQuizId,
-          quizTitle: 'Final Quiz - JAXE Creator Training',
-          isAcademyQuiz: 'true',
-        },
-      });
-      console.log('[Academy] Creator journey quiz navigation initiated');
-    } catch (error) {
-      console.error('[Academy] Error navigating to creator journey quiz:', error);
-      Alert.alert('Error', 'Failed to open quiz. Please try again.');
-    }
-  };
-
   const getCourseProgress = (course: Course) => {
     const completedItems = course.contentItems.filter(item => isItemCompleted(item)).length;
     const totalItems = course.contentItems.length;
     return { completed: completedItems, total: totalItems };
-  };
-
-  const getAcademyProgress = () => {
-    const completedVideos = academyVideos.filter(video => isAcademyVideoCompleted(video.id)).length;
-    const quizCompleted = isAcademyQuizCompleted() ? 1 : 0;
-    const totalItems = academyVideos.length + (academyQuizId ? 1 : 0);
-    const completed = completedVideos + quizCompleted;
-    return { completed, total: totalItems };
   };
 
   const getVideoNumber = (course: Course, item: ContentItem): number => {
@@ -775,225 +716,10 @@ export default function AcademyScreen() {
           )}
         </View>
 
-        {/* Creator Journey Section (from incubation_content) */}
-        {(academyVideos.length > 0 || academyQuizId) && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Creator Journey</Text>
-            <Text style={styles.sectionSubtitle}>
-              Watch all videos and complete the final quiz to become a certified JAXE creator
-            </Text>
-            <View style={styles.courseContainer}>
-              <TouchableOpacity
-                style={styles.courseHeader}
-                onPress={toggleAcademySection}
-                activeOpacity={0.7}
-              >
-                <View style={styles.courseThumbnailPlaceholder}>
-                  <IconSymbol
-                    ios_icon_name="graduationcap.fill"
-                    android_material_icon_name="school"
-                    size={32}
-                    color={colors.primary}
-                  />
-                </View>
-                
-                <View style={styles.courseHeaderText}>
-                  <Text style={styles.courseTitle}>JAXE Creator Training</Text>
-                  <Text style={styles.courseProgress}>
-                    {getAcademyProgress().completed} / {getAcademyProgress().total} items completed
-                  </Text>
-                </View>
-                
-                <IconSymbol
-                  ios_icon_name={expandedAcademySection ? "chevron.up" : "chevron.down"}
-                  android_material_icon_name={expandedAcademySection ? "expand-less" : "expand-more"}
-                  size={24}
-                  color={colors.text}
-                />
-              </TouchableOpacity>
-
-              <View style={styles.courseProgressBar}>
-                <View
-                  style={[
-                    styles.courseProgressFill,
-                    { width: `${getAcademyProgress().total > 0 ? (getAcademyProgress().completed / getAcademyProgress().total) * 100 : 0}%` },
-                  ]}
-                />
-              </View>
-
-              {expandedAcademySection && (
-                <View style={styles.courseContent}>
-                  {/* Display all videos */}
-                  {academyVideos.map((video, index) => {
-                    const isCompleted = isAcademyVideoCompleted(video.id);
-
-                    return (
-                      <TouchableOpacity
-                        key={video.id}
-                        style={[
-                          styles.contentCard,
-                          isCompleted && styles.contentCardCompleted,
-                        ]}
-                        onPress={() => handleAcademyVideoPress(video)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.videoThumbnailContainer}>
-                          {video.thumbnail_url ? (
-                            <>
-                              <Image
-                                source={{ uri: video.thumbnail_url }}
-                                style={styles.videoThumbnail}
-                                resizeMode="cover"
-                              />
-                              {/* Play icon overlay */}
-                              <View style={styles.playIconOverlay}>
-                                <View style={styles.playIconCircle}>
-                                  <IconSymbol
-                                    ios_icon_name="play.fill"
-                                    android_material_icon_name="play-arrow"
-                                    size={24}
-                                    color="#FFFFFF"
-                                  />
-                                </View>
-                              </View>
-                              {/* Completion badge */}
-                              {isCompleted && (
-                                <View style={styles.completionBadge}>
-                                  <IconSymbol
-                                    ios_icon_name="checkmark.circle.fill"
-                                    android_material_icon_name="check-circle"
-                                    size={24}
-                                    color={colors.primary}
-                                  />
-                                </View>
-                              )}
-                            </>
-                          ) : (
-                            <View style={styles.videoThumbnailPlaceholder}>
-                              <View style={styles.playIconCircle}>
-                                <IconSymbol
-                                  ios_icon_name="play.fill"
-                                  android_material_icon_name="play-arrow"
-                                  size={24}
-                                  color="#FFFFFF"
-                                />
-                              </View>
-                              {isCompleted && (
-                                <View style={styles.completionBadge}>
-                                  <IconSymbol
-                                    ios_icon_name="checkmark.circle.fill"
-                                    android_material_icon_name="check-circle"
-                                    size={24}
-                                    color={colors.primary}
-                                  />
-                                </View>
-                              )}
-                            </View>
-                          )}
-                          {/* Video number badge */}
-                          <View style={styles.videoNumberBadge}>
-                            <Text style={styles.videoNumberText}>{index + 1}</Text>
-                          </View>
-                        </View>
-
-                        <View style={styles.contentInfo}>
-                          <View style={styles.contentHeader}>
-                            <Text style={styles.contentTitle}>{video.title}</Text>
-                          </View>
-                          
-                          {video.description && (
-                            <Text
-                              style={styles.contentDescription}
-                              numberOfLines={2}
-                            >
-                              {video.description}
-                            </Text>
-                          )}
-                        </View>
-
-                        <View style={styles.contentArrow}>
-                          <IconSymbol
-                            ios_icon_name="chevron.right"
-                            android_material_icon_name="chevron-right"
-                            size={20}
-                            color="#A0A0A0"
-                          />
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-
-                  {/* Display final quiz at the end */}
-                  {academyQuizId && (
-                    <TouchableOpacity
-                      style={[
-                        styles.contentCard,
-                        styles.quizCard,
-                        isAcademyQuizCompleted() && styles.contentCardCompleted,
-                      ]}
-                      onPress={handleAcademyQuizPress}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.contentIndicatorContainer}>
-                        <View style={[
-                          styles.contentIndicatorCircle,
-                          isAcademyQuizCompleted() && styles.contentIndicatorCircleCompleted,
-                        ]}>
-                          {isAcademyQuizCompleted() ? (
-                            <IconSymbol
-                              ios_icon_name="checkmark"
-                              android_material_icon_name="check"
-                              size={20}
-                              color="#FFFFFF"
-                            />
-                          ) : (
-                            <Text style={styles.contentIndicatorQuizText}>
-                              Quiz
-                            </Text>
-                          )}
-                        </View>
-                      </View>
-
-                      <View style={styles.contentInfo}>
-                        <View style={styles.contentHeader}>
-                          <Text style={styles.contentTitle}>Final Quiz</Text>
-                          <View style={styles.requiredBadge}>
-                            <Text style={styles.requiredBadgeText}>REQUIRED</Text>
-                          </View>
-                        </View>
-                        
-                        <Text
-                          style={styles.contentDescription}
-                          numberOfLines={2}
-                        >
-                          Test your knowledge from all the videos
-                        </Text>
-                        
-                        <Text style={styles.videoDuration}>
-                          {totalQuizQuestions} questions • 70% to pass
-                        </Text>
-                      </View>
-
-                      <View style={styles.contentArrow}>
-                        <IconSymbol
-                          ios_icon_name="chevron.right"
-                          android_material_icon_name="chevron-right"
-                          size={20}
-                          color="#A0A0A0"
-                        />
-                      </View>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              )}
-            </View>
-          </View>
-        )}
-
-        {/* Courses Section */}
+        {/* Courses Section (includes Creator Journey) */}
         {courses.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Additional Courses</Text>
+            <Text style={styles.sectionTitle}>Courses</Text>
             {courses.map((course) => {
               const isExpanded = expandedCourseId === course.id;
               const progress = getCourseProgress(course);
@@ -1072,6 +798,7 @@ export default function AcademyScreen() {
                               style={[
                                 styles.contentCard,
                                 isCompleted && styles.contentCardCompleted,
+                                item.content_type === 'quiz' && styles.quizCard,
                               ]}
                               onPress={() => handleItemPress(course, item, index)}
                               activeOpacity={0.7}
@@ -1195,6 +922,12 @@ export default function AcademyScreen() {
                                     {item.quiz.description}
                                   </Text>
                                 )}
+                                
+                                {item.content_type === 'quiz' && (
+                                  <Text style={styles.videoDuration}>
+                                    70% to pass
+                                  </Text>
+                                )}
                               </View>
 
                               <View style={styles.contentArrow}>
@@ -1225,7 +958,7 @@ export default function AcademyScreen() {
             color={colors.primary}
           />
           <Text style={styles.infoText}>
-            Complete all Creator Journey videos and pass the final quiz (70% required) to become a certified JAXE creator. The quiz can be retaken as many times as needed.
+            Complete all videos and pass the final quiz (70% required) in the Creator Journey course to become a certified JAXE creator. The quiz can be retaken as many times as needed.
           </Text>
         </View>
       </ScrollView>
@@ -1292,14 +1025,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontFamily: 'Poppins_700Bold',
     color: colors.text,
-    marginBottom: 8,
-  },
-  sectionSubtitle: {
-    fontSize: 14,
-    fontFamily: 'Poppins_400Regular',
-    color: colors.textSecondary,
     marginBottom: 16,
-    lineHeight: 20,
   },
   liveEventCard: {
     backgroundColor: colors.backgroundAlt,

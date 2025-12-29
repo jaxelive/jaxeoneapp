@@ -28,12 +28,6 @@ interface QuizQuestion {
   answers: QuizAnswer[];
 }
 
-interface AcademyQuizQuestion {
-  question: string;
-  options: string[];
-  correct_answer: number;
-}
-
 interface QuizData {
   id: string;
   title: string;
@@ -44,24 +38,14 @@ interface QuizData {
   questions: QuizQuestion[];
 }
 
-interface AcademyQuizData {
-  id: string;
-  title: string;
-  description: string | null;
-  required_correct_answers: number;
-  total_questions: number;
-  questions: AcademyQuizQuestion[];
-}
-
 interface QuizComponentProps {
   quizId: string;
   creatorHandle: string;
   onComplete: (passed: boolean, score: number) => void;
   onClose: () => void;
-  isAcademyQuiz?: boolean;
 }
 
-export default function QuizComponent({ quizId, creatorHandle, onComplete, onClose, isAcademyQuiz = false }: QuizComponentProps) {
+export default function QuizComponent({ quizId, creatorHandle, onComplete, onClose }: QuizComponentProps) {
   const [fontsLoaded] = useFonts({
     Poppins_400Regular,
     Poppins_500Medium,
@@ -70,18 +54,17 @@ export default function QuizComponent({ quizId, creatorHandle, onComplete, onClo
   });
 
   const [quizData, setQuizData] = useState<QuizData | null>(null);
-  const [academyQuizData, setAcademyQuizData] = useState<AcademyQuizData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [selectedAnswers, setSelectedAnswers] = useState<{ [questionId: string]: string | number }>({});
+  const [selectedAnswers, setSelectedAnswers] = useState<{ [questionId: string]: string }>({});
   const [showResults, setShowResults] = useState(false);
   const [score, setScore] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    console.log('[QuizComponent] Mounted with quizId:', quizId, 'creatorHandle:', creatorHandle, 'isAcademyQuiz:', isAcademyQuiz);
+    console.log('[QuizComponent] Mounted with quizId:', quizId, 'creatorHandle:', creatorHandle);
     if (!quizId) {
       console.error('[QuizComponent] No quizId provided!');
       setError('Quiz ID is missing');
@@ -89,83 +72,8 @@ export default function QuizComponent({ quizId, creatorHandle, onComplete, onClo
       return;
     }
     
-    if (isAcademyQuiz) {
-      fetchAcademyQuizData();
-    } else {
-      fetchQuizData();
-    }
-  }, [quizId, isAcademyQuiz]);
-
-  const fetchAcademyQuizData = async () => {
-    try {
-      console.log('[QuizComponent] Starting fetchAcademyQuizData for quizId:', quizId);
-      setLoading(true);
-      setError(null);
-
-      // Fetch all content from incubation_content table
-      console.log('[QuizComponent] Fetching all quiz questions from incubation_content...');
-      const { data: contentData, error: contentError } = await supabase
-        .from('incubation_content')
-        .select('*')
-        .order('stage_order', { ascending: true });
-
-      if (contentError) {
-        console.error('[QuizComponent] Error fetching academy quiz:', contentError);
-        setError(`Failed to load quiz: ${contentError.message}`);
-        throw contentError;
-      }
-
-      if (!contentData || contentData.length === 0) {
-        console.error('[QuizComponent] No content found in incubation_content');
-        setError('Quiz not found');
-        setLoading(false);
-        return;
-      }
-
-      console.log('[QuizComponent] Content items fetched:', contentData.length);
-
-      // Collect all quiz questions from all content items
-      let allQuizQuestions: AcademyQuizQuestion[] = [];
-      
-      contentData.forEach((item: any) => {
-        if (item.quiz_questions && Array.isArray(item.quiz_questions) && item.quiz_questions.length > 0) {
-          console.log(`[QuizComponent] Adding ${item.quiz_questions.length} questions from "${item.title}"`);
-          allQuizQuestions = allQuizQuestions.concat(item.quiz_questions);
-        }
-      });
-
-      if (allQuizQuestions.length === 0) {
-        console.error('[QuizComponent] No quiz questions found in content');
-        setError('No questions found for this quiz');
-        setLoading(false);
-        return;
-      }
-
-      const totalQuestions = allQuizQuestions.length;
-      // Require 70% correct answers to pass
-      const requiredCorrect = Math.ceil(totalQuestions * 0.7);
-
-      const academyData: AcademyQuizData = {
-        id: quizId,
-        title: 'Final Quiz - JAXE Creator Training',
-        description: 'Test your knowledge from all the training videos',
-        required_correct_answers: requiredCorrect,
-        total_questions: totalQuestions,
-        questions: allQuizQuestions,
-      };
-
-      console.log('[QuizComponent] Setting academy quiz data with', allQuizQuestions.length, 'questions, required correct:', requiredCorrect);
-      setAcademyQuizData(academyData);
-      console.log('[QuizComponent] Academy quiz data set successfully!');
-    } catch (error: any) {
-      console.error('[QuizComponent] Exception in fetchAcademyQuizData:', error);
-      setError(`Failed to load quiz: ${error.message || 'Unknown error'}`);
-      Alert.alert('Error', 'Failed to load quiz. Please try again.');
-    } finally {
-      setLoading(false);
-      console.log('[QuizComponent] fetchAcademyQuizData completed, loading set to false');
-    }
-  };
+    fetchQuizData();
+  }, [quizId]);
 
   const fetchQuizData = async () => {
     try {
@@ -286,7 +194,7 @@ export default function QuizComponent({ quizId, creatorHandle, onComplete, onClo
     }
   };
 
-  const handleAnswerSelect = (questionId: string | number, answerId: string | number) => {
+  const handleAnswerSelect = (questionId: string, answerId: string) => {
     console.log('[QuizComponent] Answer selected:', { questionId, answerId });
     setSelectedAnswers(prev => ({
       ...prev,
@@ -296,8 +204,7 @@ export default function QuizComponent({ quizId, creatorHandle, onComplete, onClo
 
   const handleNext = () => {
     console.log('[QuizComponent] Moving to next question');
-    const totalQuestions = isAcademyQuiz ? (academyQuizData?.questions.length || 0) : (quizData?.questions.length || 0);
-    if (currentQuestionIndex < totalQuestions - 1) {
+    if (quizData && currentQuestionIndex < quizData.questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
     }
   };
@@ -310,8 +217,7 @@ export default function QuizComponent({ quizId, creatorHandle, onComplete, onClo
   };
 
   const handleSubmit = async () => {
-    const data = isAcademyQuiz ? academyQuizData : quizData;
-    if (!data) {
+    if (!quizData) {
       console.error('[QuizComponent] Cannot submit - no quiz data');
       return;
     }
@@ -319,8 +225,8 @@ export default function QuizComponent({ quizId, creatorHandle, onComplete, onClo
     console.log('[QuizComponent] Submitting quiz');
 
     // Check if all questions are answered
-    const unansweredQuestions = data.questions.filter(
-      (q, index) => !selectedAnswers[isAcademyQuiz ? index : (q as QuizQuestion).id]
+    const unansweredQuestions = quizData.questions.filter(
+      (q) => !selectedAnswers[q.id]
     );
 
     if (unansweredQuestions.length > 0) {
@@ -338,35 +244,26 @@ export default function QuizComponent({ quizId, creatorHandle, onComplete, onClo
       // Calculate score
       let correct = 0;
       
-      if (isAcademyQuiz && academyQuizData) {
-        academyQuizData.questions.forEach((question, index) => {
-          const selectedAnswerIndex = selectedAnswers[index];
-          if (selectedAnswerIndex === question.correct_answer) {
-            correct++;
-          }
-        });
-      } else if (quizData) {
-        quizData.questions.forEach(question => {
-          const selectedAnswerId = selectedAnswers[question.id];
-          const selectedAnswer = question.answers.find(a => a.id === selectedAnswerId);
-          if (selectedAnswer?.is_correct) {
-            correct++;
-          }
-        });
-      }
+      quizData.questions.forEach(question => {
+        const selectedAnswerId = selectedAnswers[question.id];
+        const selectedAnswer = question.answers.find(a => a.id === selectedAnswerId);
+        if (selectedAnswer?.is_correct) {
+          correct++;
+        }
+      });
 
-      const totalQuestions = data.questions.length;
+      const totalQuestions = quizData.questions.length;
       const scorePercentage = Math.round((correct / totalQuestions) * 100);
       
       // Use required_correct_answers from database to determine pass/fail
-      const passed = correct >= (data.required_correct_answers || 0);
+      const passed = correct >= (quizData.required_correct_answers || 0);
 
       console.log('[QuizComponent] Quiz results:', { 
         correct, 
         totalQuestions, 
         scorePercentage, 
         passed,
-        required: data.required_correct_answers 
+        required: quizData.required_correct_answers 
       });
 
       setCorrectCount(correct);
@@ -423,9 +320,7 @@ export default function QuizComponent({ quizId, creatorHandle, onComplete, onClo
     );
   }
 
-  const data = isAcademyQuiz ? academyQuizData : quizData;
-
-  if (error || !data) {
+  if (error || !quizData) {
     return (
       <View style={styles.container}>
         <View style={styles.centerContent}>
@@ -441,7 +336,7 @@ export default function QuizComponent({ quizId, creatorHandle, onComplete, onClo
           </Text>
           <TouchableOpacity 
             style={styles.retryButton} 
-            onPress={isAcademyQuiz ? fetchAcademyQuizData : fetchQuizData}
+            onPress={fetchQuizData}
           >
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
@@ -454,7 +349,7 @@ export default function QuizComponent({ quizId, creatorHandle, onComplete, onClo
   }
 
   if (showResults) {
-    const passed = correctCount >= (data.required_correct_answers || 0);
+    const passed = correctCount >= (quizData.required_correct_answers || 0);
 
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -495,10 +390,10 @@ export default function QuizComponent({ quizId, creatorHandle, onComplete, onClo
             <Text style={styles.scoreLabel}>Your Score</Text>
             <Text style={styles.scoreValue}>{score}%</Text>
             <Text style={styles.scoreDetails}>
-              {correctCount} out of {data.questions.length} correct
+              {correctCount} out of {quizData.questions.length} correct
             </Text>
             <Text style={styles.scoreRequirement}>
-              Required: {data.required_correct_answers} correct answers ({Math.round((data.required_correct_answers / data.questions.length) * 100)}%)
+              Required: {quizData.required_correct_answers} correct answers ({Math.round((quizData.required_correct_answers / quizData.questions.length) * 100)}%)
             </Text>
           </View>
 
@@ -533,22 +428,9 @@ export default function QuizComponent({ quizId, creatorHandle, onComplete, onClo
   }
 
   // Render current question
-  let currentQuestion: any;
-  let selectedAnswerId: string | number | undefined;
-  let totalQuestions: number;
-
-  if (isAcademyQuiz && academyQuizData) {
-    currentQuestion = academyQuizData.questions[currentQuestionIndex];
-    selectedAnswerId = selectedAnswers[currentQuestionIndex];
-    totalQuestions = academyQuizData.questions.length;
-  } else if (quizData) {
-    currentQuestion = quizData.questions[currentQuestionIndex];
-    selectedAnswerId = selectedAnswers[currentQuestion.id];
-    totalQuestions = quizData.questions.length;
-  } else {
-    return null;
-  }
-
+  const currentQuestion = quizData.questions[currentQuestionIndex];
+  const selectedAnswerId = selectedAnswers[currentQuestion.id];
+  const totalQuestions = quizData.questions.length;
   const progress = ((currentQuestionIndex + 1) / totalQuestions) * 100;
 
   return (
@@ -562,7 +444,7 @@ export default function QuizComponent({ quizId, creatorHandle, onComplete, onClo
             color={colors.text}
           />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{data.title}</Text>
+        <Text style={styles.headerTitle}>{quizData.title}</Text>
         <View style={styles.backButton} />
       </View>
 
@@ -577,75 +459,40 @@ export default function QuizComponent({ quizId, creatorHandle, onComplete, onClo
 
       <ScrollView style={styles.quizContent} contentContainerStyle={styles.quizContentContainer}>
         <Text style={styles.questionText}>
-          {isAcademyQuiz ? currentQuestion.question : currentQuestion.question_text}
+          {currentQuestion.question_text}
         </Text>
 
         <View style={styles.answersContainer}>
-          {isAcademyQuiz ? (
-            // Academy quiz answers
-            currentQuestion.options.map((option: string, index: number) => {
-              const isSelected = selectedAnswerId === index;
+          {currentQuestion.answers.map((answer: QuizAnswer) => {
+            const isSelected = selectedAnswerId === answer.id;
 
-              return (
-                <TouchableOpacity
-                  key={index}
-                  style={[
-                    styles.answerCard,
-                    isSelected && styles.answerCardSelected,
-                  ]}
-                  onPress={() => handleAnswerSelect(currentQuestionIndex, index)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[
-                    styles.answerRadio,
-                    isSelected && styles.answerRadioSelected,
-                  ]}>
-                    {isSelected && (
-                      <View style={styles.answerRadioInner} />
-                    )}
-                  </View>
-                  <Text style={[
-                    styles.answerText,
-                    isSelected && styles.answerTextSelected,
-                  ]}>
-                    {option}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })
-          ) : (
-            // Course quiz answers
-            currentQuestion.answers.map((answer: QuizAnswer) => {
-              const isSelected = selectedAnswerId === answer.id;
-
-              return (
-                <TouchableOpacity
-                  key={answer.id}
-                  style={[
-                    styles.answerCard,
-                    isSelected && styles.answerCardSelected,
-                  ]}
-                  onPress={() => handleAnswerSelect(currentQuestion.id, answer.id)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[
-                    styles.answerRadio,
-                    isSelected && styles.answerRadioSelected,
-                  ]}>
-                    {isSelected && (
-                      <View style={styles.answerRadioInner} />
-                    )}
-                  </View>
-                  <Text style={[
-                    styles.answerText,
-                    isSelected && styles.answerTextSelected,
-                  ]}>
-                    {answer.answer_text}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })
-          )}
+            return (
+              <TouchableOpacity
+                key={answer.id}
+                style={[
+                  styles.answerCard,
+                  isSelected && styles.answerCardSelected,
+                ]}
+                onPress={() => handleAnswerSelect(currentQuestion.id, answer.id)}
+                activeOpacity={0.7}
+              >
+                <View style={[
+                  styles.answerRadio,
+                  isSelected && styles.answerRadioSelected,
+                ]}>
+                  {isSelected && (
+                    <View style={styles.answerRadioInner} />
+                  )}
+                </View>
+                <Text style={[
+                  styles.answerText,
+                  isSelected && styles.answerTextSelected,
+                ]}>
+                  {answer.answer_text}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </ScrollView>
 

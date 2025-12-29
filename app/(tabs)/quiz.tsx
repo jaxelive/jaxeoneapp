@@ -13,18 +13,15 @@ export default function QuizScreen() {
   const params = useLocalSearchParams<{ 
     quizId: string;
     quizTitle: string;
-    isAcademyQuiz?: string;
   }>();
 
   // Ensure we have the quizId
   const quizId = Array.isArray(params.quizId) ? params.quizId[0] : params.quizId;
   const quizTitle = Array.isArray(params.quizTitle) ? params.quizTitle[0] : params.quizTitle;
-  const isAcademyQuiz = params.isAcademyQuiz === 'true';
 
   console.log('[QuizScreen] Rendering with params:', { 
     quizId, 
     quizTitle,
-    isAcademyQuiz,
     rawParams: params 
   });
 
@@ -71,7 +68,6 @@ export default function QuizScreen() {
           creatorHandle={CREATOR_HANDLE}
           onComplete={handleQuizComplete}
           onClose={handleClose}
-          isAcademyQuiz={isAcademyQuiz}
         />
       </View>
     </>
