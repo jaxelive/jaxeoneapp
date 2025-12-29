@@ -150,7 +150,7 @@ export default function QuizComponent({ quizId, creatorHandle, onComplete, onClo
         questions: questions,
       };
 
-      console.log('[QuizComponent] Setting academy quiz data with', questions.length, 'questions');
+      console.log('[QuizComponent] Setting academy quiz data with', questions.length, 'questions, required correct:', requiredCorrect);
       setAcademyQuizData(academyData);
       console.log('[QuizComponent] Academy quiz data set successfully!');
     } catch (error: any) {
@@ -195,6 +195,7 @@ export default function QuizComponent({ quizId, creatorHandle, onComplete, onClo
         title: quiz.title,
         required_correct_answers: quiz.required_correct_answers,
         total_questions: quiz.total_questions,
+        passing_score: quiz.passing_score,
       });
 
       // Fetch questions
@@ -268,7 +269,7 @@ export default function QuizComponent({ quizId, creatorHandle, onComplete, onClo
         questions: questionsWithAnswers,
       };
 
-      console.log('[QuizComponent] Setting quiz data with', questionsWithAnswers.length, 'questions');
+      console.log('[QuizComponent] Setting quiz data with', questionsWithAnswers.length, 'questions, required correct:', quiz.required_correct_answers);
       setQuizData(quizDataToSet);
       console.log('[QuizComponent] Quiz data set successfully!');
     } catch (error: any) {
@@ -352,6 +353,8 @@ export default function QuizComponent({ quizId, creatorHandle, onComplete, onClo
 
       const totalQuestions = data.questions.length;
       const scorePercentage = Math.round((correct / totalQuestions) * 100);
+      
+      // Use required_correct_answers from database to determine pass/fail
       const passed = correct >= (data.required_correct_answers || 0);
 
       console.log('[QuizComponent] Quiz results:', { 
@@ -491,26 +494,24 @@ export default function QuizComponent({ quizId, creatorHandle, onComplete, onClo
               {correctCount} out of {data.questions.length} correct
             </Text>
             <Text style={styles.scoreRequirement}>
-              Required: {data.required_correct_answers} correct answers
+              Required: {data.required_correct_answers} correct answers ({Math.round((data.required_correct_answers / data.questions.length) * 100)}%)
             </Text>
           </View>
 
           <View style={styles.resultsButtons}>
-            {!passed && (
-              <TouchableOpacity
-                style={styles.retryButtonLarge}
-                onPress={handleRetry}
-                activeOpacity={0.7}
-              >
-                <IconSymbol
-                  ios_icon_name="arrow.clockwise"
-                  android_material_icon_name="refresh"
-                  size={20}
-                  color="#FFFFFF"
-                />
-                <Text style={styles.retryButtonTextLarge}>Try Again</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={styles.retryButtonLarge}
+              onPress={handleRetry}
+              activeOpacity={0.7}
+            >
+              <IconSymbol
+                ios_icon_name="arrow.clockwise"
+                android_material_icon_name="refresh"
+                size={20}
+                color="#FFFFFF"
+              />
+              <Text style={styles.retryButtonTextLarge}>Retake Quiz</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.doneButton}
