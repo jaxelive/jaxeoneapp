@@ -170,18 +170,18 @@ export default function AcademyScreen() {
         setRegistrations(registrationsData || []);
       }
 
-      // Fetch academy content from incubation_content table
-      console.log('[Academy] Fetching academy content from incubation_content...');
+      // Fetch academy content from incubation_content table (Creator Journey)
+      console.log('[Academy] Fetching creator journey content from incubation_content...');
       const { data: academyData, error: academyError } = await supabase
         .from('incubation_content')
         .select('*')
         .order('stage_order', { ascending: true });
 
       if (academyError) {
-        console.error('[Academy] Error fetching academy content:', academyError);
-        setError(`Academy content fetch error: ${academyError.message}`);
+        console.error('[Academy] Error fetching creator journey content:', academyError);
+        setError(`Creator journey content fetch error: ${academyError.message}`);
       } else {
-        console.log('[Academy] Academy content fetched:', academyData?.length || 0);
+        console.log('[Academy] Creator journey content fetched:', academyData?.length || 0);
         
         // Transform academy data to include content type
         const transformedAcademyData: AcademyContent[] = (academyData || []).map((item: any) => {
@@ -523,7 +523,7 @@ export default function AcademyScreen() {
 
   const handleAcademyItemPress = async (item: AcademyContent) => {
     if (item.content_type === 'quiz' && item.quiz_questions && item.quiz_questions.length > 0) {
-      console.log('[Academy] Opening academy quiz:', item.id, item.title);
+      console.log('[Academy] Opening creator journey quiz:', item.id, item.title);
       
       try {
         // Navigate to quiz screen with academy quiz ID
@@ -535,13 +535,13 @@ export default function AcademyScreen() {
             isAcademyQuiz: 'true',
           },
         });
-        console.log('[Academy] Academy quiz navigation initiated');
+        console.log('[Academy] Creator journey quiz navigation initiated');
       } catch (error) {
-        console.error('[Academy] Error navigating to academy quiz:', error);
+        console.error('[Academy] Error navigating to creator journey quiz:', error);
         Alert.alert('Error', 'Failed to open quiz. Please try again.');
       }
     } else if (item.video_url) {
-      console.log('[Academy] Opening academy video:', item.id);
+      console.log('[Academy] Opening creator journey video:', item.id);
       
       router.push({
         pathname: '/(tabs)/video-player',
@@ -751,10 +751,13 @@ export default function AcademyScreen() {
           )}
         </View>
 
-        {/* Academy Content Section (from incubation_content) */}
+        {/* Creator Journey Section (from incubation_content) */}
         {academyContent.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Academy Training</Text>
+            <Text style={styles.sectionTitle}>Creator Journey</Text>
+            <Text style={styles.sectionSubtitle}>
+              Complete each stage with videos and quizzes to become a certified JAXE creator
+            </Text>
             <View style={styles.courseContainer}>
               <TouchableOpacity
                 style={styles.courseHeader}
@@ -851,7 +854,7 @@ export default function AcademyScreen() {
                           
                           {isQuiz && item.quiz_questions && (
                             <Text style={styles.videoDuration}>
-                              {item.quiz_questions.length} questions
+                              {item.quiz_questions.length} questions • 70% to pass
                             </Text>
                           )}
                         </View>
@@ -876,7 +879,7 @@ export default function AcademyScreen() {
         {/* Courses Section */}
         {courses.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Courses</Text>
+            <Text style={styles.sectionTitle}>Additional Courses</Text>
             {courses.map((course) => {
               const isExpanded = expandedCourseId === course.id;
               const progress = getCourseProgress(course);
@@ -1108,7 +1111,7 @@ export default function AcademyScreen() {
             color={colors.primary}
           />
           <Text style={styles.infoText}>
-            All videos and quizzes are available immediately. Complete them in any order to track your progress!
+            Complete the Creator Journey quizzes to become a certified JAXE creator. Each quiz requires 70% to pass and can be retaken as many times as needed.
           </Text>
         </View>
       </ScrollView>
@@ -1175,7 +1178,14 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontFamily: 'Poppins_700Bold',
     color: colors.text,
+    marginBottom: 8,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    fontFamily: 'Poppins_400Regular',
+    color: colors.textSecondary,
     marginBottom: 16,
+    lineHeight: 20,
   },
   liveEventCard: {
     backgroundColor: colors.backgroundAlt,
