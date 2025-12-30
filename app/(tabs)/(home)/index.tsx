@@ -187,7 +187,9 @@ export default function HomeScreen() {
         liveHours: Math.floor(creator.live_duration_seconds_30d / 3600),
         hasManager: !!creator.manager,
         managerName: creator.manager ? `${creator.manager.first_name} ${creator.manager.last_name}` : 'None',
-        creatorType: creator.creator_type
+        creatorType: creator.creator_type,
+        userRole: creator.user_role,
+        isManager: creator.user_role === 'manager'
       });
       fetchBattleData();
       fetchChallengeData();
@@ -614,6 +616,9 @@ export default function HomeScreen() {
     ? creator.creator_type 
     : ['Creator'];
 
+  // Check if user is a manager
+  const isManager = creator.user_role === 'manager';
+
   // Calculate tier and next tier from real data with region-based logic
   const currentDiamonds = creator.diamonds_monthly || 0;
   const currentTier = getTierFromDiamonds(currentDiamonds, region);
@@ -715,7 +720,7 @@ export default function HomeScreen() {
                     <View style={styles.regionBadge}>
                       <Text style={styles.regionBadgeText}>Creator</Text>
                     </View>
-                    {creator.user_role === 'manager' && (
+                    {isManager && (
                       <View style={styles.managerBadge}>
                         <Text style={styles.managerBadgeText}>Manager</Text>
                       </View>
@@ -1547,6 +1552,7 @@ const styles = StyleSheet.create({
   headerRegions: {
     flexDirection: 'row',
     gap: 6,
+    flexWrap: 'wrap',
   },
   regionBadge: {
     backgroundColor: '#2A2A2A',
@@ -1567,7 +1573,7 @@ const styles = StyleSheet.create({
   },
   managerBadgeText: {
     fontSize: 11,
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins_600SemiBold',
     color: '#FFFFFF',
   },
   headerIcons: {
