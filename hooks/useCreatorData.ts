@@ -66,7 +66,7 @@ export function useCreatorData(creatorHandle: string = 'avelezsanti') {
       setLoading(true);
       setError(null);
 
-      // Get the authenticated user
+      // Get the authenticated user using the modern method
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
       
       if (authError) {

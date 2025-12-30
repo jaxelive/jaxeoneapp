@@ -79,7 +79,7 @@ export default function ManagerPortalScreen() {
 
       console.log('[ManagerPortal] Starting data fetch');
 
-      // Step 1: Get the authenticated user
+      // Step 1: Get the authenticated user using the modern method
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
       
       if (authError) {
