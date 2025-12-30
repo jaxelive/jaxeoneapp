@@ -17,8 +17,8 @@ import { colors } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { HeaderRightButton, HeaderLeftButton } from "@/components/HeaderButtons";
 import { useCreatorData } from "@/hooks/useCreatorData";
-import { AnimatedCard } from "@/components/AnimatedCard";
-import { AnimatedNumber } from "@/components/AnimatedNumber";
+import AnimatedCard from "@/components/AnimatedCard";
+import AnimatedNumber from "@/components/AnimatedNumber";
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 
 const { width } = Dimensions.get('window');
