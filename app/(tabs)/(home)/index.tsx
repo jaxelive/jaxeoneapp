@@ -1252,38 +1252,6 @@ export default function HomeScreen() {
                 </View>
               </CardPressable>
 
-              {/* MANAGER TOOLS SECTION - ONLY FOR MANAGERS */}
-              {isManager && (
-                <View style={styles.darkCard}>
-                  <View style={styles.cardHeader}>
-                    <Text style={styles.cardEmoji}>👔</Text>
-                    <View style={styles.cardHeaderText}>
-                      <Text style={styles.cardTitleLarge}>Manager Tools</Text>
-                      <Text style={styles.cardSubtitle}>Manage your creators</Text>
-                    </View>
-                  </View>
-                  <View style={styles.toolsGrid}>
-                    <TouchableOpacity 
-                      style={styles.toolButton}
-                      onPress={() => {
-                        console.log('Manager Portal tapped');
-                        // TODO: Navigate to Manager Portal
-                      }}
-                    >
-                      <View style={styles.toolIconContainer}>
-                        <IconSymbol 
-                          ios_icon_name="person.3.fill" 
-                          android_material_icon_name="groups" 
-                          size={24} 
-                          color="#10B981" 
-                        />
-                      </View>
-                      <Text style={styles.toolButtonText}>Manager Portal</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-
               {/* CREATOR TOOLS SECTION */}
               <View style={styles.darkCard}>
                 <View style={styles.cardHeader}>
