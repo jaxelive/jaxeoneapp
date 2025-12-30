@@ -124,6 +124,7 @@ export default function HomeScreen() {
   const [isRegisteredForEvent, setIsRegisteredForEvent] = useState(false);
   const [registeringEventId, setRegisteringEventId] = useState<string | null>(null);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+  const hasInitializedRef = useRef(false);
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -175,138 +176,6 @@ export default function HomeScreen() {
       console.error('[HomeScreen] Unexpected error checking notifications:', error);
     }
   }, [creator]);
-
-  useEffect(() => {
-    if (creator) {
-      console.log('[HomeScreen] 🎯 Creator loaded - CHECKING MANAGER BADGE:', {
-        handle: creator.creator_handle,
-        name: `${creator.first_name} ${creator.last_name}`,
-        monthlyDiamonds: creator.diamonds_monthly,
-        totalDiamonds: creator.total_diamonds,
-        liveDays: creator.live_days_30d,
-        liveHours: Math.floor(creator.live_duration_seconds_30d / 3600),
-        hasManager: !!creator.manager,
-        managerName: creator.manager ? `${creator.manager.first_name} ${creator.manager.last_name}` : 'None',
-        creatorType: creator.creator_type,
-        userRole: creator.user_role,
-        isManager: creator.user_role === 'manager',
-        '🔥 SHOULD SHOW MANAGER BADGE': creator.user_role === 'manager' ? 'YES ✅' : 'NO ❌'
-      });
-      fetchBattleData();
-      fetchChallengeData();
-      fetchEducationData();
-      fetchTopCreators();
-      fetchFeaturedLiveEvent();
-      checkUnreadNotifications();
-    }
-  }, [creator]);
-
-  const fetchFeaturedLiveEvent = async () => {
-    try {
-      console.log('[HomeScreen] Fetching featured live event...');
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayString = today.toISOString().split('T')[0];
-
-      // Fetch the next upcoming live event
-      const { data: eventData, error: eventError } = await supabase
-        .from('live_events')
-        .select('*')
-        .gte('event_date', todayString)
-        .order('event_date', { ascending: true })
-        .order('event_hour', { ascending: true })
-        .limit(1)
-        .single();
-
-      if (eventError) {
-        if (eventError.code !== 'PGRST116') {
-          console.error('[HomeScreen] Error fetching featured event:', eventError);
-        } else {
-          console.log('[HomeScreen] No upcoming live events found');
-        }
-        setFeaturedLiveEvent(null);
-        return;
-      }
-
-      console.log('[HomeScreen] Featured live event found:', eventData);
-      setFeaturedLiveEvent(eventData);
-
-      // Check if user is registered for this event
-      const { data: registrationData, error: registrationError } = await supabase
-        .from('live_event_registrations')
-        .select('*')
-        .eq('live_event_id', eventData.id)
-        .eq('creator_handle', CREATOR_HANDLE)
-        .single();
-
-      if (registrationError) {
-        if (registrationError.code !== 'PGRST116') {
-          console.error('[HomeScreen] Error checking registration:', registrationError);
-        }
-        setIsRegisteredForEvent(false);
-      } else {
-        console.log('[HomeScreen] User is registered for event');
-        setIsRegisteredForEvent(true);
-      }
-    } catch (error: any) {
-      console.error('[HomeScreen] Unexpected error fetching featured event:', error);
-    }
-  };
-
-  const handleRegisterForEvent = async (eventId: string) => {
-    if (registeringEventId) return;
-
-    try {
-      console.log('[HomeScreen] Registering for event:', eventId);
-      setRegisteringEventId(eventId);
-
-      const { error } = await supabase
-        .from('live_event_registrations')
-        .insert({
-          live_event_id: eventId,
-          creator_handle: CREATOR_HANDLE,
-        });
-
-      if (error) {
-        console.error('[HomeScreen] Error registering for event:', error);
-        Alert.alert('Error', 'Failed to register for the event. Please try again.');
-        return;
-      }
-
-      setIsRegisteredForEvent(true);
-      console.log('[HomeScreen] Successfully registered for event');
-      Alert.alert('Success', 'You have been registered for this event. You can now join!');
-    } catch (error: any) {
-      console.error('[HomeScreen] Exception during registration:', error);
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
-    } finally {
-      setRegisteringEventId(null);
-    }
-  };
-
-  const handleJoinEvent = async (event: LiveEvent) => {
-    if (!event.event_link) {
-      Alert.alert('Error', 'Event link not available yet.');
-      return;
-    }
-
-    try {
-      console.log('[HomeScreen] Opening event link:', event.event_link);
-      await Linking.openURL(event.event_link);
-    } catch (error) {
-      console.error('[HomeScreen] Error opening link:', error);
-      Alert.alert('Error', 'Failed to open event link.');
-    }
-  };
-
-  const formatEventDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
 
   const fetchBattleData = useCallback(async () => {
     if (!creator) return;
@@ -543,6 +412,149 @@ export default function HomeScreen() {
       console.error('[HomeScreen] Unexpected error fetching top creators:', error);
     }
   }, [creator]);
+
+  const fetchFeaturedLiveEvent = useCallback(async () => {
+    try {
+      console.log('[HomeScreen] Fetching featured live event...');
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayString = today.toISOString().split('T')[0];
+
+      // Fetch the next upcoming live event
+      const { data: eventData, error: eventError } = await supabase
+        .from('live_events')
+        .select('*')
+        .gte('event_date', todayString)
+        .order('event_date', { ascending: true })
+        .order('event_hour', { ascending: true })
+        .limit(1)
+        .single();
+
+      if (eventError) {
+        if (eventError.code !== 'PGRST116') {
+          console.error('[HomeScreen] Error fetching featured event:', eventError);
+        } else {
+          console.log('[HomeScreen] No upcoming live events found');
+        }
+        setFeaturedLiveEvent(null);
+        return;
+      }
+
+      console.log('[HomeScreen] Featured live event found:', eventData);
+      setFeaturedLiveEvent(eventData);
+
+      // Check if user is registered for this event
+      const { data: registrationData, error: registrationError } = await supabase
+        .from('live_event_registrations')
+        .select('*')
+        .eq('live_event_id', eventData.id)
+        .eq('creator_handle', CREATOR_HANDLE)
+        .single();
+
+      if (registrationError) {
+        if (registrationError.code !== 'PGRST116') {
+          console.error('[HomeScreen] Error checking registration:', registrationError);
+        }
+        setIsRegisteredForEvent(false);
+      } else {
+        console.log('[HomeScreen] User is registered for event');
+        setIsRegisteredForEvent(true);
+      }
+    } catch (error: any) {
+      console.error('[HomeScreen] Unexpected error fetching featured event:', error);
+    }
+  }, []);
+
+  // Single initialization effect - only runs once when creator data is available
+  useEffect(() => {
+    if (creator && !hasInitializedRef.current) {
+      console.log('[HomeScreen] 🎯 Creator loaded - Initializing data (ONCE):', {
+        handle: creator.creator_handle,
+        name: `${creator.first_name} ${creator.last_name}`,
+        monthlyDiamonds: creator.diamonds_monthly,
+        totalDiamonds: creator.total_diamonds,
+        liveDays: creator.live_days_30d,
+        liveHours: Math.floor(creator.live_duration_seconds_30d / 3600),
+        hasManager: !!creator.manager,
+        managerName: creator.manager ? `${creator.manager.first_name} ${creator.manager.last_name}` : 'None',
+        creatorType: creator.creator_type,
+        userRole: creator.user_role,
+        isManager: creator.user_role === 'manager',
+        '🔥 SHOULD SHOW MANAGER BADGE': creator.user_role === 'manager' ? 'YES ✅' : 'NO ❌'
+      });
+      
+      hasInitializedRef.current = true;
+      
+      // Fetch all additional data in parallel
+      Promise.all([
+        fetchBattleData(),
+        fetchChallengeData(),
+        fetchEducationData(),
+        fetchTopCreators(),
+        fetchFeaturedLiveEvent(),
+        checkUnreadNotifications(),
+      ]).then(() => {
+        console.log('[HomeScreen] All data initialized successfully');
+      }).catch((err) => {
+        console.error('[HomeScreen] Error during initialization:', err);
+      });
+    }
+  }, [creator, fetchBattleData, fetchChallengeData, fetchEducationData, fetchTopCreators, fetchFeaturedLiveEvent, checkUnreadNotifications]);
+
+  const handleRegisterForEvent = async (eventId: string) => {
+    if (registeringEventId) return;
+
+    try {
+      console.log('[HomeScreen] Registering for event:', eventId);
+      setRegisteringEventId(eventId);
+
+      const { error } = await supabase
+        .from('live_event_registrations')
+        .insert({
+          live_event_id: eventId,
+          creator_handle: CREATOR_HANDLE,
+        });
+
+      if (error) {
+        console.error('[HomeScreen] Error registering for event:', error);
+        Alert.alert('Error', 'Failed to register for the event. Please try again.');
+        return;
+      }
+
+      setIsRegisteredForEvent(true);
+      console.log('[HomeScreen] Successfully registered for event');
+      Alert.alert('Success', 'You have been registered for this event. You can now join!');
+    } catch (error: any) {
+      console.error('[HomeScreen] Exception during registration:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+    } finally {
+      setRegisteringEventId(null);
+    }
+  };
+
+  const handleJoinEvent = async (event: LiveEvent) => {
+    if (!event.event_link) {
+      Alert.alert('Error', 'Event link not available yet.');
+      return;
+    }
+
+    try {
+      console.log('[HomeScreen] Opening event link:', event.event_link);
+      await Linking.openURL(event.event_link);
+    } catch (error) {
+      console.error('[HomeScreen] Error opening link:', error);
+      Alert.alert('Error', 'Failed to open event link.');
+    }
+  };
+
+  const formatEventDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
 
   const handleManagerCardPress = () => {
     if (creator?.assigned_manager_id) {

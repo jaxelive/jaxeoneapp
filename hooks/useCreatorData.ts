@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/app/integrations/supabase/client';
 
 export interface ManagerData {
@@ -58,6 +58,7 @@ export function useCreatorData(creatorHandle: string = 'avelezsanti') {
   const [creator, setCreator] = useState<CreatorData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const hasFetchedRef = useRef(false);
 
   const fetchCreatorData = useCallback(async () => {
     try {
@@ -185,9 +186,16 @@ export function useCreatorData(creatorHandle: string = 'avelezsanti') {
   }, [creatorHandle]);
 
   useEffect(() => {
+    // Prevent double fetch on initial mount
+    if (hasFetchedRef.current) {
+      console.log('[useCreatorData] Skipping duplicate fetch - already fetched');
+      return;
+    }
+
     console.log('[useCreatorData] Effect triggered for handle:', creatorHandle);
+    hasFetchedRef.current = true;
     fetchCreatorData();
-  }, [creatorHandle]);
+  }, [fetchCreatorData]);
 
   const getCreatorStats = (): CreatorStats | null => {
     if (!creator) {
