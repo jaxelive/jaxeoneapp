@@ -191,6 +191,12 @@ export default function HomeScreen() {
                   ))}
                   {isManager && (
                     <View style={styles.managerBadge}>
+                      <IconSymbol 
+                        ios_icon_name="star.fill" 
+                        android_material_icon_name="star" 
+                        size={12} 
+                        color="#FFFFFF" 
+                      />
                       <Text style={styles.managerBadgeText}>Manager</Text>
                     </View>
                   )}
@@ -709,14 +715,17 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   managerBadge: {
-    backgroundColor: colors.success,
-    paddingHorizontal: 14,
+    backgroundColor: '#FF6B35',
+    paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   managerBadgeText: {
     fontSize: 12,
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins_700Bold',
     color: '#FFFFFF',
   },
   card: {
