@@ -60,32 +60,18 @@ export function useCreatorData(creatorHandle: string = 'avelezsanti') {
   const [creator, setCreator] = useState<CreatorData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { session, user: authUser, loading: authLoading } = useSupabase();
+  const { loading: authLoading } = useSupabase();
 
   const fetchCreatorData = useCallback(async () => {
-    // Wait for auth to finish loading
-    if (authLoading) {
-      console.log('[useCreatorData] Waiting for auth to finish loading...');
-      return;
-    }
-
-    // Check if user is authenticated
-    if (!authUser || !session) {
-      console.warn('[useCreatorData] No authenticated user or session');
-      setError('Not authenticated. Please log in.');
-      setCreator(null);
-      setLoading(false);
-      return;
-    }
+    // TESTING MODE: Skip auth checks
+    console.log('[useCreatorData] TESTING MODE - Skipping authentication checks');
 
     try {
       console.log('[useCreatorData] Starting fetch for creator:', creatorHandle);
       setLoading(true);
       setError(null);
 
-      console.log('[useCreatorData] Authenticated user ID:', authUser.id);
-
-      // First, fetch the creator data
+      // Fetch the creator data directly without auth checks
       const { data: creatorData, error: creatorError } = await supabase
         .from('creators')
         .select('*')
@@ -111,20 +97,10 @@ export function useCreatorData(creatorHandle: string = 'avelezsanti') {
 
       console.log('[useCreatorData] Creator data loaded:', creatorData);
 
-      // Fetch the user linked to the authenticated user to get the role
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('id, role')
-        .eq('auth_user_id', authUser.id)
-        .maybeSingle();
-
+      // TESTING MODE: For now, we'll skip fetching user role
+      // In production, you would fetch this based on the authenticated user
       let userRole: string | null = null;
-      if (userError) {
-        console.warn('[useCreatorData] User fetch error (might not exist):', userError);
-      } else if (userData) {
-        userRole = userData.role;
-        console.log('[useCreatorData] User role loaded:', userRole, 'for user:', userData.id);
-      }
+      console.log('[useCreatorData] TESTING MODE - Skipping user role fetch');
 
       // Fetch manager data if assigned
       let managerData: ManagerData | null = null;
@@ -176,7 +152,7 @@ export function useCreatorData(creatorHandle: string = 'avelezsanti') {
         ...creatorData,
         manager: managerData,
         user_role: userRole,
-        auth_user_id: authUser.id,
+        auth_user_id: 'test-user-id', // Mock ID for testing
       };
 
       console.log('[useCreatorData] Final creator data:', {
@@ -189,7 +165,7 @@ export function useCreatorData(creatorHandle: string = 'avelezsanti') {
         hasManager: !!managerData,
         managerName: managerData ? `${managerData.first_name} ${managerData.last_name}` : 'None',
         userRole: userRole,
-        authUserId: authUser.id,
+        authUserId: 'test-user-id',
       });
       
       setCreator(transformedCreator);
@@ -202,10 +178,10 @@ export function useCreatorData(creatorHandle: string = 'avelezsanti') {
       setLoading(false);
       console.log('[useCreatorData] Fetch complete');
     }
-  }, [creatorHandle, authUser, session, authLoading]);
+  }, [creatorHandle]);
 
   useEffect(() => {
-    console.log('[useCreatorData] Effect triggered - authLoading:', authLoading, 'authUser:', !!authUser);
+    console.log('[useCreatorData] Effect triggered - TESTING MODE');
     fetchCreatorData();
   }, [fetchCreatorData]);
 

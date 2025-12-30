@@ -18,7 +18,7 @@ const SupabaseContext = createContext<SupabaseContextType | undefined>(undefined
 export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Changed to false for testing
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -62,8 +62,24 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   useEffect(() => {
-    console.log('[SupabaseContext] Initializing authentication');
+    console.log('[SupabaseContext] TESTING MODE - Authentication disabled');
     
+    // For testing: Create a mock session/user
+    // This bypasses authentication entirely
+    const mockUser = {
+      id: 'test-user-id',
+      email: 'test@example.com',
+      app_metadata: {},
+      user_metadata: {},
+      aud: 'authenticated',
+      created_at: new Date().toISOString(),
+    } as User;
+
+    setUser(mockUser);
+    setLoading(false);
+
+    // Commented out for testing - this is the normal auth flow
+    /*
     let mounted = true;
 
     // Check for existing session
@@ -112,6 +128,7 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       mounted = false;
       subscription.unsubscribe();
     };
+    */
   }, []);
 
   return (

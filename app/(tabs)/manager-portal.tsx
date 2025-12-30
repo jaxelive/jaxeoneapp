@@ -77,101 +77,72 @@ export default function ManagerPortalScreen() {
       setLoading(true);
       setError(null);
 
-      console.log('[ManagerPortal] Starting data fetch');
+      console.log('[ManagerPortal] TESTING MODE - Skipping authentication checks');
 
-      // Step 1: Get the authenticated user using the modern method
-      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+      // TESTING MODE: For testing, we'll use a hardcoded user ID
+      // In production, you would get this from the authenticated user
+      const testUserId = 'test-user-id';
       
-      if (authError) {
-        console.error('[ManagerPortal] Auth error:', authError);
-        setError(`Authentication error: ${authError.message}`);
-        setLoading(false);
-        return;
-      }
-
-      if (!authUser) {
-        console.warn('[ManagerPortal] No authenticated user');
-        setError('You must be logged in to access the Manager Portal. Please sign in and try again.');
-        setLoading(false);
-        return;
-      }
-
-      console.log('[ManagerPortal] Authenticated user ID:', authUser.id);
-      console.log('[ManagerPortal] User email:', authUser.email);
-
-      // Step 2: Fetch the user record to check their role
-      console.log('[ManagerPortal] Fetching user record from users table...');
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('id, role, first_name, last_name, email, avatar_url')
-        .eq('auth_user_id', authUser.id)
-        .maybeSingle();
-
-      if (userError) {
-        console.error('[ManagerPortal] User fetch error:', userError);
-        setError(`Database error: ${userError.message}. Please contact support.`);
-        setLoading(false);
-        return;
-      }
-
-      if (!userData) {
-        console.warn('[ManagerPortal] No user record found for auth_user_id:', authUser.id);
-        setError('Your user profile was not found in the system. Please contact support to set up your account.');
-        setLoading(false);
-        return;
-      }
-
-      console.log('[ManagerPortal] User data found:', {
-        id: userData.id,
-        role: userData.role,
-        name: `${userData.first_name} ${userData.last_name}`,
-        email: userData.email
-      });
-
-      // Step 3: Check if user has manager role
-      if (userData.role !== 'manager') {
-        console.warn('[ManagerPortal] User does not have manager role. Current role:', userData.role);
-        setError(`Access denied. You do not have manager access. Your current role is: ${userData.role || 'none'}. This portal is only available to users with the Manager role.`);
-        setIsManager(false);
-        setLoading(false);
-        return;
-      }
-
-      setIsManager(true);
-      console.log('[ManagerPortal] User confirmed as manager');
-
-      // Step 4: Fetch the manager record for this user
-      console.log('[ManagerPortal] Fetching manager record for user_id:', userData.id);
-      const { data: managerData, error: managerError } = await supabase
+      // For testing purposes, let's try to fetch a manager record
+      // You can change this to a real user_id from your database for testing
+      console.log('[ManagerPortal] Fetching manager record for test user');
+      
+      // Try to fetch any manager record for testing
+      const { data: managerRecords, error: managerListError } = await supabase
         .from('managers')
-        .select('id, whatsapp, tiktok_handle, avatar_url, promoted_to_manager_at')
-        .eq('user_id', userData.id)
-        .maybeSingle();
+        .select(`
+          id,
+          user_id,
+          whatsapp,
+          tiktok_handle,
+          avatar_url,
+          promoted_to_manager_at,
+          users:user_id (
+            id,
+            first_name,
+            last_name,
+            email,
+            avatar_url,
+            role
+          )
+        `)
+        .limit(1);
 
-      if (managerError) {
-        console.error('[ManagerPortal] Manager fetch error:', managerError);
-        setError(`Could not fetch manager profile: ${managerError.message}`);
+      if (managerListError) {
+        console.error('[ManagerPortal] Manager fetch error:', managerListError);
+        setError(`Database error: ${managerListError.message}. Please contact support.`);
         setLoading(false);
         return;
       }
 
-      if (!managerData) {
-        console.warn('[ManagerPortal] No manager record found for user_id:', userData.id);
-        setError('Manager profile not found. Your user account has the manager role, but no manager profile exists. Please contact support.');
+      if (!managerRecords || managerRecords.length === 0) {
+        console.warn('[ManagerPortal] No manager records found in database');
+        setError('No manager profiles found in the system. This is a testing environment - please add a manager record to the database to test this feature.');
+        setLoading(false);
+        return;
+      }
+
+      // Use the first manager record for testing
+      const managerRecord = managerRecords[0];
+      const managerUser = managerRecord.users as any;
+
+      if (!managerUser) {
+        console.warn('[ManagerPortal] Manager user data not found');
+        setError('Manager user data not found. Please check database relationships.');
         setLoading(false);
         return;
       }
 
       const managerInfo: ManagerData = {
-        id: managerData.id,
-        user_id: userData.id,
-        first_name: userData.first_name,
-        last_name: userData.last_name,
-        email: userData.email,
-        avatar_url: managerData.avatar_url || userData.avatar_url,
-        whatsapp: managerData.whatsapp,
-        tiktok_handle: managerData.tiktok_handle,
-        promoted_to_manager_at: managerData.promoted_to_manager_at,
+        id: managerRecord.id,
+        user_id: managerUser.id,
+        first_name: managerUser.first_name,
+        last_name: managerUser.last_name,
+        email: managerUser.email,
+        avatar_url: managerRecord.avatar_url || managerUser.avatar_url,
+        whatsapp: managerRecord.whatsapp,
+        tiktok_handle: managerRecord.tiktok_handle,
+        promoted_to_manager_at: managerRecord.promoted_to_manager_at,
       };
 
       console.log('[ManagerPortal] Manager data loaded successfully:', {
@@ -180,25 +151,25 @@ export default function ManagerPortalScreen() {
         email: managerInfo.email
       });
       setManager(managerInfo);
+      setIsManager(true);
 
-      // Step 5: Fetch all creators assigned to this manager
-      console.log('[ManagerPortal] Fetching assigned creators for manager_id:', managerData.id);
+      // Fetch all creators assigned to this manager
+      console.log('[ManagerPortal] Fetching assigned creators for manager_id:', managerRecord.id);
       const { data: creatorsData, error: creatorsError } = await supabase
         .from('creators')
         .select('id, first_name, last_name, creator_handle, email, region, graduation_status, total_diamonds, phone, avatar_url, profile_picture_url')
-        .eq('assigned_manager_id', managerData.id)
+        .eq('assigned_manager_id', managerRecord.id)
         .eq('is_active', true)
         .order('total_diamonds', { ascending: false });
 
       if (creatorsError) {
         console.error('[ManagerPortal] Creators fetch error:', creatorsError);
-        // Don't fail completely, just log the error
         console.warn('[ManagerPortal] Could not fetch creators, continuing with empty list');
       } else {
         console.log('[ManagerPortal] Assigned creators loaded:', creatorsData?.length || 0);
         setAssignedCreators(creatorsData || []);
 
-        // Step 6: Calculate stats
+        // Calculate stats
         const totalCreators = creatorsData?.length || 0;
         const totalRookies = creatorsData?.filter(c => 
           !c.graduation_status || 
@@ -335,8 +306,11 @@ export default function ManagerPortalScreen() {
             size={64}
             color={colors.error}
           />
-          <Text style={styles.errorTitle}>Access Denied</Text>
+          <Text style={styles.errorTitle}>Manager Portal</Text>
           <Text style={styles.errorText}>{error || 'Unable to access Manager Portal'}</Text>
+          <Text style={styles.testingNote}>
+            TESTING MODE: Authentication is disabled. The portal is attempting to load any available manager data from the database.
+          </Text>
           <TouchableOpacity 
             style={styles.retryButton} 
             onPress={onRefresh}
@@ -378,6 +352,19 @@ export default function ManagerPortalScreen() {
           />
         }
       >
+        {/* TESTING MODE BANNER */}
+        <View style={styles.testingBanner}>
+          <IconSymbol
+            ios_icon_name="info.circle.fill"
+            android_material_icon_name="info"
+            size={20}
+            color="#FFFFFF"
+          />
+          <Text style={styles.testingBannerText}>
+            TESTING MODE: Authentication disabled
+          </Text>
+        </View>
+
         {/* MANAGER HEADER SECTION */}
         <View style={styles.headerCard}>
           <View style={styles.headerTop}>
@@ -694,7 +681,16 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
+    marginBottom: 16,
+  },
+  testingNote: {
+    fontSize: 13,
+    fontFamily: 'Poppins_400Regular',
+    color: colors.primary,
+    textAlign: 'center',
+    lineHeight: 20,
     marginBottom: 24,
+    paddingHorizontal: 20,
   },
   retryButton: {
     backgroundColor: colors.primary,
@@ -722,6 +718,21 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
     paddingBottom: 40,
+  },
+  testingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 20,
+    gap: 8,
+  },
+  testingBannerText: {
+    fontSize: 14,
+    fontFamily: 'Poppins_600SemiBold',
+    color: '#FFFFFF',
   },
 
   // HEADER CARD

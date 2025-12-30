@@ -104,10 +104,20 @@ export default function ToolsScreen() {
   });
 
   const [isManager, setIsManager] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Changed to false for testing
 
   useEffect(() => {
     const checkManagerRole = async () => {
+      // TESTING MODE: Skip authentication checks
+      console.log('[ToolsScreen] TESTING MODE - Skipping authentication checks');
+      
+      // For testing, you can manually set isManager to true or false
+      // to test the manager tools visibility
+      setIsManager(false); // Change to true to test manager tools
+      setLoading(false);
+
+      // Commented out for testing - this is the normal auth flow
+      /*
       try {
         console.log('[ToolsScreen] Checking manager role');
         
@@ -147,6 +157,7 @@ export default function ToolsScreen() {
       } finally {
         setLoading(false);
       }
+      */
     };
 
     checkManagerRole();
