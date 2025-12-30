@@ -717,13 +717,9 @@ export default function HomeScreen() {
                     <View style={styles.regionBadge}>
                       <Text style={styles.regionBadgeText}>{region}</Text>
                     </View>
-                    {isManager ? (
+                    {isManager && (
                       <View style={styles.managerBadge}>
                         <Text style={styles.managerBadgeText}>Manager</Text>
-                      </View>
-                    ) : (
-                      <View style={styles.regionBadge}>
-                        <Text style={styles.regionBadgeText}>Creator</Text>
                       </View>
                     )}
                   </View>
