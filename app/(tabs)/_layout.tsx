@@ -44,6 +44,8 @@ export default function TabLayout() {
         <Stack.Screen key="learning-hub" name="learning-hub" />
         <Stack.Screen key="challenge-day-details" name="challenge-day-details" />
         <Stack.Screen key="manager-details" name="manager-details" />
+        <Stack.Screen key="manager-portal" name="manager-portal" />
+        <Stack.Screen key="creator-detail" name="creator-detail" />
         <Stack.Screen key="shop" name="shop" />
         <Stack.Screen key="profile" name="profile" />
         <Stack.Screen key="notifications" name="notifications" />

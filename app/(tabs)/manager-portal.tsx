@@ -15,7 +15,7 @@ import {
   Animated,
   Easing,
 } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
@@ -92,6 +92,7 @@ export default function ManagerPortalScreen() {
     Poppins_700Bold,
   });
 
+  const router = useRouter();
   const { creator, loading: creatorLoading } = useCreatorData(CREATOR_HANDLE);
   const [managerIdentity, setManagerIdentity] = useState<ManagerIdentity | null>(null);
   const [assignedCreators, setAssignedCreators] = useState<AssignedCreator[]>([]);
@@ -107,7 +108,6 @@ export default function ManagerPortalScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expandedCreatorId, setExpandedCreatorId] = useState<string | null>(null);
   
   // Filtering and sorting
   const [searchQuery, setSearchQuery] = useState('');
@@ -337,6 +337,14 @@ export default function ManagerPortalScreen() {
     }
   };
 
+  const handleCreatorCardPress = (creatorId: string) => {
+    console.log('[ManagerPortal] Navigating to creator detail:', creatorId);
+    router.push({
+      pathname: '/(tabs)/creator-detail',
+      params: { creatorId },
+    });
+  };
+
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
@@ -461,10 +469,6 @@ export default function ManagerPortalScreen() {
 
     return filtered;
   }, [assignedCreators, searchQuery, sortBy, filterStatus, filterBattle, filterPayout]);
-
-  const toggleCreatorExpand = (creatorId: string) => {
-    setExpandedCreatorId(prev => prev === creatorId ? null : creatorId);
-  };
 
   if (!fontsLoaded || loading || creatorLoading) {
     return (
@@ -975,7 +979,7 @@ export default function ManagerPortalScreen() {
             </ScrollView>
           </View>
 
-          {/* Creators List */}
+          {/* Creators List - COMPACT CARDS ONLY */}
           {filteredAndSortedCreators.length === 0 ? (
             <View style={styles.emptyState}>
               <IconSymbol
@@ -993,300 +997,100 @@ export default function ManagerPortalScreen() {
           ) : (
             <View style={styles.creatorsList}>
               {filteredAndSortedCreators.map((assignedCreator) => {
-                const isExpanded = expandedCreatorId === assignedCreator.id;
                 const currentLevel = getGraduationLevel(assignedCreator.graduation_status);
                 const diamondsToNext = getDiamondsToNextGraduation(assignedCreator.diamonds_monthly, currentLevel);
                 const nextTarget = getNextGraduationTarget(currentLevel);
                 const progressPercentage = getProgressPercentage(assignedCreator.diamonds_monthly, currentLevel);
-                const isEligible = assignedCreator.graduation_eligible && !assignedCreator.graduation_paid_this_month && !assignedCreator.was_graduated_at_assignment;
-                const isPaid = assignedCreator.graduation_paid_this_month;
-                const isIneligible = assignedCreator.was_graduated_at_assignment;
 
                 return (
-                  <View key={assignedCreator.id} style={styles.creatorCard}>
-                    {/* Collapsed Row */}
-                    <TouchableOpacity 
-                      style={styles.creatorRowCollapsed}
-                      onPress={() => toggleCreatorExpand(assignedCreator.id)}
-                      activeOpacity={0.7}
-                    >
-                      {/* Avatar */}
-                      <View style={styles.creatorAvatarContainer}>
-                        {assignedCreator.avatar_url || assignedCreator.profile_picture_url ? (
-                          <Image
-                            source={{ uri: assignedCreator.avatar_url || assignedCreator.profile_picture_url }}
-                            style={styles.creatorAvatar}
+                  <TouchableOpacity 
+                    key={assignedCreator.id}
+                    style={styles.creatorCard}
+                    onPress={() => handleCreatorCardPress(assignedCreator.id)}
+                    activeOpacity={0.7}
+                  >
+                    {/* Avatar */}
+                    <View style={styles.creatorAvatarContainer}>
+                      {assignedCreator.avatar_url || assignedCreator.profile_picture_url ? (
+                        <Image
+                          source={{ uri: assignedCreator.avatar_url || assignedCreator.profile_picture_url }}
+                          style={styles.creatorAvatar}
+                        />
+                      ) : (
+                        <View style={styles.creatorAvatarPlaceholder}>
+                          <IconSymbol
+                            ios_icon_name="person.fill"
+                            android_material_icon_name="person"
+                            size={20}
+                            color={colors.textSecondary}
                           />
-                        ) : (
-                          <View style={styles.creatorAvatarPlaceholder}>
-                            <IconSymbol
-                              ios_icon_name="person.fill"
-                              android_material_icon_name="person"
-                              size={20}
-                              color={colors.textSecondary}
-                            />
-                          </View>
-                        )}
-                      </View>
+                        </View>
+                      )}
+                    </View>
 
-                      {/* Info */}
-                      <View style={styles.creatorInfoCollapsed}>
-                        <View style={styles.creatorNameRow}>
-                          <Text style={styles.creatorName}>
-                            @{assignedCreator.creator_handle}
+                    {/* Info */}
+                    <View style={styles.creatorInfo}>
+                      <View style={styles.creatorNameRow}>
+                        <Text style={styles.creatorName}>
+                          @{assignedCreator.creator_handle}
+                        </Text>
+                        <View 
+                          style={[
+                            styles.statusPill,
+                            { backgroundColor: getGraduationBadgeColor(assignedCreator.graduation_status) }
+                          ]}
+                        >
+                          <Text style={styles.statusPillText}>
+                            {currentLevel.charAt(0).toUpperCase() + currentLevel.slice(1)}
                           </Text>
-                          <View 
-                            style={[
-                              styles.statusPill,
-                              { backgroundColor: getGraduationBadgeColor(assignedCreator.graduation_status) }
-                            ]}
-                          >
-                            <Text style={styles.statusPillText}>
-                              {currentLevel.charAt(0).toUpperCase() + currentLevel.slice(1)}
-                            </Text>
-                          </View>
                         </View>
-                        
-                        <View style={styles.creatorStatsRow}>
-                          <View style={styles.creatorStat}>
-                            <IconSymbol
-                              ios_icon_name="diamond.fill"
-                              android_material_icon_name="diamond"
-                              size={14}
-                              color={colors.textSecondary}
-                            />
-                            <Text style={styles.creatorStatText}>
-                              {assignedCreator.diamonds_monthly.toLocaleString()}
-                            </Text>
-                          </View>
-                          {currentLevel !== 'gold' && (
-                            <Text style={styles.diamondsToNext}>
-                              {diamondsToNext.toLocaleString()} to {nextTarget}
-                            </Text>
-                          )}
+                      </View>
+                      
+                      <View style={styles.creatorStatsRow}>
+                        <View style={styles.creatorStat}>
+                          <IconSymbol
+                            ios_icon_name="diamond.fill"
+                            android_material_icon_name="diamond"
+                            size={14}
+                            color={colors.textSecondary}
+                          />
+                          <Text style={styles.creatorStatText}>
+                            {assignedCreator.diamonds_monthly.toLocaleString()}
+                          </Text>
                         </View>
-
-                        {/* Diamond Progress Bar - Increased Height (Always Visible) */}
                         {currentLevel !== 'gold' && (
-                          <View style={styles.collapsedProgressBarContainer}>
-                            <View style={styles.collapsedProgressBarBg}>
-                              <View 
-                                style={[
-                                  styles.collapsedProgressBarFill,
-                                  { 
-                                    width: `${progressPercentage}%`,
-                                    backgroundColor: currentLevel === 'silver' ? '#FFD700' : '#C0C0C0'
-                                  }
-                                ]}
-                              />
-                            </View>
-                          </View>
+                          <Text style={styles.diamondsToNext}>
+                            {diamondsToNext.toLocaleString()} to {nextTarget}
+                          </Text>
                         )}
                       </View>
 
-                      {/* Expand Icon */}
-                      <IconSymbol
-                        ios_icon_name={isExpanded ? "chevron.up" : "chevron.down"}
-                        android_material_icon_name={isExpanded ? "expand-less" : "expand-more"}
-                        size={24}
-                        color={colors.textSecondary}
-                      />
-                    </TouchableOpacity>
-
-                    {/* Expanded Details */}
-                    {isExpanded && (
-                      <View style={styles.creatorExpanded}>
-                        {/* A) Creator Identity */}
-                        <View style={styles.expandedSection}>
-                          <Text style={styles.expandedSectionTitle}>Creator Identity</Text>
-                          <View style={styles.creatorIdentityContainer}>
-                            <Text style={styles.creatorIdentityName}>
-                              {assignedCreator.first_name} {assignedCreator.last_name}
-                            </Text>
-                            <TouchableOpacity 
-                              style={styles.creatorIdentityLink}
-                              onPress={() => handleTikTokPress(assignedCreator.creator_handle)}
-                            >
-                              <IconSymbol
-                                ios_icon_name="music.note"
-                                android_material_icon_name="music-note"
-                                size={16}
-                                color={colors.primary}
-                              />
-                              <Text style={styles.creatorIdentityLinkText}>
-                                @{assignedCreator.creator_handle}
-                              </Text>
-                            </TouchableOpacity>
-                            {assignedCreator.phone && (
-                              <TouchableOpacity 
-                                style={styles.creatorIdentityLink}
-                                onPress={() => handleWhatsAppPress(assignedCreator.phone!)}
-                              >
-                                <IconSymbol
-                                  ios_icon_name="message.fill"
-                                  android_material_icon_name="chat"
-                                  size={16}
-                                  color={colors.primary}
-                                />
-                                <Text style={styles.creatorIdentityLinkText}>
-                                  {assignedCreator.phone}
-                                </Text>
-                              </TouchableOpacity>
-                            )}
-                            <TouchableOpacity 
-                              style={styles.creatorIdentityLink}
-                              onPress={() => Linking.openURL(`mailto:${assignedCreator.email}`)}
-                            >
-                              <IconSymbol
-                                ios_icon_name="envelope.fill"
-                                android_material_icon_name="email"
-                                size={16}
-                                color={colors.primary}
-                              />
-                              <Text style={styles.creatorIdentityLinkText}>
-                                {assignedCreator.email}
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-
-                        {/* B) Diamonds & Graduation Progress */}
-                        <View style={styles.expandedSection}>
-                          <Text style={styles.expandedSectionTitle}>
-                            Diamonds & Graduation
-                          </Text>
-                          <View style={styles.diamondsLargeContainer}>
-                            <IconSymbol
-                              ios_icon_name="diamond.fill"
-                              android_material_icon_name="diamond"
-                              size={32}
-                              color="#06B6D4"
+                      {/* Diamond Progress Bar - Increased Height (Always Visible) */}
+                      {currentLevel !== 'gold' && (
+                        <View style={styles.progressBarContainer}>
+                          <View style={styles.progressBarBg}>
+                            <View 
+                              style={[
+                                styles.progressBarFill,
+                                { 
+                                  width: `${progressPercentage}%`,
+                                  backgroundColor: currentLevel === 'silver' ? '#FFD700' : '#C0C0C0'
+                                }
+                              ]}
                             />
-                            <Text style={styles.diamondsLargeValue}>
-                              {assignedCreator.diamonds_monthly.toLocaleString()}
-                            </Text>
-                            <Text style={styles.diamondsLargeLabel}>Monthly Diamonds</Text>
                           </View>
-
-                          {currentLevel !== 'gold' && (
-                            <>
-                              <Text style={styles.progressToNextLabel}>
-                                Progress to {nextTarget}
-                              </Text>
-                              <View style={styles.progressBarContainer}>
-                                <View style={styles.progressBarBg}>
-                                  <View 
-                                    style={[
-                                      styles.progressBarFill,
-                                      { 
-                                        width: `${progressPercentage}%`,
-                                        backgroundColor: currentLevel === 'silver' ? '#FFD700' : '#C0C0C0'
-                                      }
-                                    ]}
-                                  />
-                                </View>
-                              </View>
-                              <View style={styles.progressStats}>
-                                <Text style={styles.progressStatText}>
-                                  Current: {assignedCreator.diamonds_monthly.toLocaleString()}
-                                </Text>
-                                <Text style={styles.progressStatText}>
-                                  Target: {(currentLevel === 'silver' ? GOLD_THRESHOLD : SILVER_THRESHOLD).toLocaleString()}
-                                </Text>
-                                <Text style={styles.progressStatText}>
-                                  Remaining: {diamondsToNext.toLocaleString()}
-                                </Text>
-                              </View>
-                            </>
-                          )}
                         </View>
+                      )}
+                    </View>
 
-                        {/* C) Battle Information */}
-                        <View style={styles.expandedSection}>
-                          <Text style={styles.expandedSectionTitle}>Battle Status</Text>
-                          <View style={styles.battleStatusRow}>
-                            {assignedCreator.battle_booked ? (
-                              <>
-                                <IconSymbol
-                                  ios_icon_name="checkmark.circle.fill"
-                                  android_material_icon_name="check-circle"
-                                  size={20}
-                                  color={colors.success}
-                                />
-                                <Text style={styles.battleStatusText}>Battle: Booked ✅</Text>
-                              </>
-                            ) : (
-                              <>
-                                <IconSymbol
-                                  ios_icon_name="exclamationmark.circle.fill"
-                                  android_material_icon_name="error"
-                                  size={20}
-                                  color={colors.warning}
-                                />
-                                <Text style={styles.battleStatusText}>Battle: Missing ⚠️</Text>
-                              </>
-                            )}
-                          </View>
-                          {!assignedCreator.battle_booked && (
-                            <TouchableOpacity style={styles.ctaButton}>
-                              <Text style={styles.ctaButtonText}>Remind Creator</Text>
-                            </TouchableOpacity>
-                          )}
-                        </View>
-
-                        {/* D) Manager Payout Information */}
-                        <View style={styles.expandedSection}>
-                          <Text style={styles.expandedSectionTitle}>Manager Payout Info</Text>
-                          
-                          {/* Payout Cards */}
-                          <View style={styles.payoutCardsContainer}>
-                            <View style={styles.payoutCard}>
-                              <Text style={styles.payoutCardLabel}>Silver Graduation</Text>
-                              <Text style={styles.payoutCardValue}>${SILVER_PAYOUT}</Text>
-                            </View>
-                            <View style={styles.payoutCard}>
-                              <Text style={styles.payoutCardLabel}>Gold Graduation</Text>
-                              <Text style={styles.payoutCardValue}>${GOLD_PAYOUT}</Text>
-                            </View>
-                          </View>
-
-                          <View style={styles.payoutRules}>
-                            <Text style={styles.payoutRulesTitle}>Rules:</Text>
-                            <Text style={styles.payoutRulesText}>
-                              ✓ Manager earns only on the first graduation per creator per month
-                            </Text>
-                            <Text style={styles.payoutRulesText}>
-                              ✓ If creator is already Silver/Gold when assigned → $0 earned
-                            </Text>
-                            <Text style={styles.payoutRulesText}>
-                              ✓ After graduation, no more bonuses from that creator for the month
-                            </Text>
-                          </View>
-                          {isIneligible && (
-                            <View style={styles.ineligibleBanner}>
-                              <Text style={styles.ineligibleText}>
-                                Ineligible — Already Graduated
-                              </Text>
-                            </View>
-                          )}
-                          {isPaid && (
-                            <View style={styles.paidBanner}>
-                              <Text style={styles.paidText}>
-                                Bonus earned this month ✅
-                              </Text>
-                            </View>
-                          )}
-                          {isEligible && !isPaid && (
-                            <View style={styles.eligibleBanner}>
-                              <Text style={styles.eligibleText}>
-                                Eligible for bonus 💰
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                      </View>
-                    )}
-                  </View>
+                    {/* Chevron Icon */}
+                    <IconSymbol
+                      ios_icon_name="chevron.right"
+                      android_material_icon_name="chevron-right"
+                      size={24}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
                 );
               })}
             </View>
@@ -1653,12 +1457,9 @@ const styles = StyleSheet.create({
   creatorCard: {
     backgroundColor: colors.grey,
     borderRadius: 16,
-    overflow: 'hidden',
-  },
-  creatorRowCollapsed: {
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
   },
   creatorAvatarContainer: {
     marginRight: 12,
@@ -1676,7 +1477,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  creatorInfoCollapsed: {
+  creatorInfo: {
     flex: 1,
   },
   creatorNameRow: {
@@ -1722,207 +1523,17 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_500Medium',
     color: colors.textSecondary,
   },
-  collapsedProgressBarContainer: {
+  progressBarContainer: {
     marginTop: 4,
   },
-  collapsedProgressBarBg: {
+  progressBarBg: {
     height: 10,
     backgroundColor: colors.backgroundAlt,
     borderRadius: 5,
     overflow: 'hidden',
   },
-  collapsedProgressBarFill: {
-    height: '100%',
-    borderRadius: 5,
-  },
-  creatorExpanded: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    gap: 16,
-  },
-  expandedSection: {
-    backgroundColor: colors.backgroundAlt,
-    borderRadius: 12,
-    padding: 16,
-  },
-  expandedSectionTitle: {
-    fontSize: 15,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.text,
-    marginBottom: 12,
-  },
-  creatorIdentityContainer: {
-    gap: 10,
-  },
-  creatorIdentityName: {
-    fontSize: 18,
-    fontFamily: 'Poppins_700Bold',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  creatorIdentityLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  creatorIdentityLinkText: {
-    fontSize: 14,
-    fontFamily: 'Poppins_500Medium',
-    color: colors.primary,
-  },
-  diamondsLargeContainer: {
-    alignItems: 'center',
-    paddingVertical: 16,
-    marginBottom: 16,
-  },
-  diamondsLargeValue: {
-    fontSize: 36,
-    fontFamily: 'Poppins_700Bold',
-    color: colors.text,
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  diamondsLargeLabel: {
-    fontSize: 13,
-    fontFamily: 'Poppins_500Medium',
-    color: colors.textSecondary,
-  },
-  progressToNextLabel: {
-    fontSize: 14,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.text,
-    marginBottom: 8,
-  },
-  progressBarContainer: {
-    marginBottom: 12,
-  },
-  progressBarBg: {
-    height: 12,
-    backgroundColor: colors.grey,
-    borderRadius: 6,
-    overflow: 'hidden',
-  },
   progressBarFill: {
     height: '100%',
-    borderRadius: 6,
-  },
-  progressStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  progressStatText: {
-    fontSize: 11,
-    fontFamily: 'Poppins_500Medium',
-    color: colors.textSecondary,
-  },
-  battleStatusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  battleStatusText: {
-    fontSize: 14,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.text,
-  },
-  ctaButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  ctaButtonText: {
-    fontSize: 13,
-    fontFamily: 'Poppins_600SemiBold',
-    color: '#FFFFFF',
-  },
-  payoutCardsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  payoutCard: {
-    flex: 1,
-    backgroundColor: colors.grey,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.primary,
-  },
-  payoutCardLabel: {
-    fontSize: 12,
-    fontFamily: 'Poppins_500Medium',
-    color: colors.textSecondary,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  payoutCardValue: {
-    fontSize: 28,
-    fontFamily: 'Poppins_700Bold',
-    color: colors.primary,
-  },
-  payoutRules: {
-    backgroundColor: colors.grey,
-    borderRadius: 8,
-    padding: 12,
-    gap: 6,
-  },
-  payoutRulesTitle: {
-    fontSize: 13,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  payoutRulesText: {
-    fontSize: 12,
-    fontFamily: 'Poppins_400Regular',
-    color: colors.textSecondary,
-    lineHeight: 18,
-  },
-  ineligibleBanner: {
-    backgroundColor: colors.error + '20',
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: colors.error,
-  },
-  ineligibleText: {
-    fontSize: 13,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.error,
-    textAlign: 'center',
-  },
-  paidBanner: {
-    backgroundColor: colors.success + '20',
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: colors.success,
-  },
-  paidText: {
-    fontSize: 13,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.success,
-    textAlign: 'center',
-  },
-  eligibleBanner: {
-    backgroundColor: colors.primary + '20',
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  eligibleText: {
-    fontSize: 13,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.primary,
-    textAlign: 'center',
+    borderRadius: 5,
   },
 });
