@@ -69,9 +69,25 @@ export function useBattleFlyerGen() {
 
     try {
       console.log('Getting Supabase session...');
-      const { data: session } = await supabase.auth.getSession();
-      if (!session?.session?.access_token) {
+      
+      // Try to get the current session
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        throw new Error('Authentication error. Please try logging out and back in.');
+      }
+
+      if (!sessionData?.session) {
+        console.error('No session found');
         throw new Error('Not authenticated. Please log in again.');
+      }
+
+      const accessToken = sessionData.session.access_token;
+      console.log('Session found, access token length:', accessToken?.length);
+
+      if (!accessToken) {
+        throw new Error('Invalid session. Please log in again.');
       }
 
       console.log('Creating FormData...');
@@ -86,32 +102,24 @@ export function useBattleFlyerGen() {
         type: params.image.type ?? 'image/jpeg',
       } as any);
 
-      const url = `${supabase.supabaseUrl}/functions/v1/generate-battle-flyer`;
-      console.log('Calling edge function:', url);
+      console.log('Calling edge function via supabase.functions.invoke...');
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.session.access_token}`,
-        },
+      // Use supabase.functions.invoke instead of direct fetch
+      const { data, error } = await supabase.functions.invoke('generate-battle-flyer', {
         body: form,
       });
 
-      console.log('Response status:', response.status);
-
-      if (!response.ok) {
-        let errorMessage = 'Failed to generate flyer';
-        try {
-          const errorData = await response.json();
-          console.error('Error response:', errorData);
-          errorMessage = errorData.detail || errorData.error || errorMessage;
-        } catch (e) {
-          console.error('Failed to parse error response:', e);
-        }
+      if (error) {
+        console.error('Edge function error:', error);
+        const errorMessage = error.message || error.details || 'Failed to generate flyer';
         throw new Error(errorMessage);
       }
 
-      const result = await response.json() as BattleFlyerResult;
+      if (!data) {
+        throw new Error('No data returned from edge function');
+      }
+
+      const result = data as BattleFlyerResult;
       console.log('Flyer generated successfully:', result);
       setState({ status: 'success', data: result, error: null });
       return result;
