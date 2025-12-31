@@ -86,10 +86,11 @@ interface ManagerRanking {
   first_name: string;
   last_name: string;
   graduated_creators: number;
+  tiktok_handle: string | null;
+  avatar_url: string | null;
 }
 
-type SortOption = 'diamonds_high' | 'diamonds_low' | 'closest_graduation' | 'status_asc' | 'status_desc' | 'battle_missing' | 'eligible_first';
-type FilterStatus = 'all' | 'rookie' | 'silver' | 'gold';
+type CreatorStatusTab = 'rookie' | 'silver' | 'gold';
 type FilterBattle = 'all' | 'booked' | 'missing';
 type FilterPayout = 'all' | 'eligible' | 'ineligible' | 'paid';
 type TabOption = 'overview' | 'rankings';
@@ -121,8 +122,7 @@ export default function ManagerPortalScreen() {
   
   // Filtering and sorting
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<SortOption>('diamonds_high');
-  const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
+  const [activeStatusTab, setActiveStatusTab] = useState<CreatorStatusTab>('rookie');
   const [filterBattle, setFilterBattle] = useState<FilterBattle>('all');
   const [filterPayout, setFilterPayout] = useState<FilterPayout>('all');
   
@@ -317,25 +317,28 @@ export default function ManagerPortalScreen() {
       if (error) {
         console.error('[ManagerPortal] ❌ Error fetching rankings:', error);
         // Fallback to manual query
-        const { data: fallbackData, error: fallbackError } = await supabase
+        const { data: managersData, error: managersError } = await supabase
           .from('managers')
           .select(`
             id,
             user_id,
+            tiktok_handle,
+            avatar_url,
             users!managers_user_id_fkey (
               first_name,
-              last_name
+              last_name,
+              avatar_url
             )
           `);
 
-        if (fallbackError) {
-          console.error('[ManagerPortal] ❌ Fallback query failed:', fallbackError);
+        if (managersError) {
+          console.error('[ManagerPortal] ❌ Fallback query failed:', managersError);
           return;
         }
 
         // Manually count graduated creators for each manager
         const rankingsWithCounts = await Promise.all(
-          (fallbackData || []).map(async (manager: any) => {
+          (managersData || []).map(async (manager: any) => {
             const { count } = await supabase
               .from('creators')
               .select('id', { count: 'exact', head: true })
@@ -348,6 +351,8 @@ export default function ManagerPortalScreen() {
               first_name: manager.users?.first_name || '',
               last_name: manager.users?.last_name || '',
               graduated_creators: count || 0,
+              tiktok_handle: manager.tiktok_handle,
+              avatar_url: manager.avatar_url || manager.users?.avatar_url,
             };
           })
         );
@@ -439,6 +444,14 @@ export default function ManagerPortalScreen() {
       pathname: '/(tabs)/creator-detail',
       params: { creatorId },
     });
+  };
+
+  const handleRankingCardPress = (tiktokHandle: string | null) => {
+    if (tiktokHandle) {
+      handleTikTokPress(tiktokHandle);
+    } else {
+      Alert.alert('Info', 'TikTok profile not available for this manager');
+    }
   };
 
   const handleEditPress = () => {
@@ -578,7 +591,7 @@ export default function ManagerPortalScreen() {
     };
   }, [assignedCreators]);
 
-  // Filter and sort creators
+  // Filter and sort creators by active status tab
   const filteredAndSortedCreators = useMemo(() => {
     let filtered = [...assignedCreators];
 
@@ -591,13 +604,11 @@ export default function ManagerPortalScreen() {
       );
     }
 
-    // Status filter
-    if (filterStatus !== 'all') {
-      filtered = filtered.filter(c => {
-        const level = getGraduationLevel(c.graduation_status);
-        return level === filterStatus;
-      });
-    }
+    // Status filter - filter by active tab
+    filtered = filtered.filter(c => {
+      const level = getGraduationLevel(c.graduation_status);
+      return level === activeStatusTab;
+    });
 
     // Battle filter
     if (filterBattle !== 'all') {
@@ -618,46 +629,11 @@ export default function ManagerPortalScreen() {
       });
     }
 
-    // Sort
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'diamonds_high':
-          return b.diamonds_monthly - a.diamonds_monthly;
-        case 'diamonds_low':
-          return a.diamonds_monthly - b.diamonds_monthly;
-        case 'closest_graduation': {
-          const aLevel = getGraduationLevel(a.graduation_status);
-          const bLevel = getGraduationLevel(b.graduation_status);
-          const aRemaining = getDiamondsToNextGraduation(a.diamonds_monthly, aLevel);
-          const bRemaining = getDiamondsToNextGraduation(b.diamonds_monthly, bLevel);
-          return aRemaining - bRemaining;
-        }
-        case 'status_asc': {
-          const order = { rookie: 0, silver: 1, gold: 2 };
-          const aLevel = getGraduationLevel(a.graduation_status);
-          const bLevel = getGraduationLevel(b.graduation_status);
-          return order[aLevel] - order[bLevel];
-        }
-        case 'status_desc': {
-          const order = { rookie: 0, silver: 1, gold: 2 };
-          const aLevel = getGraduationLevel(a.graduation_status);
-          const bLevel = getGraduationLevel(b.graduation_status);
-          return order[bLevel] - order[aLevel];
-        }
-        case 'battle_missing':
-          return (a.battle_booked === b.battle_booked) ? 0 : a.battle_booked ? 1 : -1;
-        case 'eligible_first': {
-          const aEligible = a.graduation_eligible && !a.graduation_paid_this_month && !a.was_graduated_at_assignment;
-          const bEligible = b.graduation_eligible && !b.graduation_paid_this_month && !b.was_graduated_at_assignment;
-          return (aEligible === bEligible) ? 0 : aEligible ? -1 : 1;
-        }
-        default:
-          return 0;
-      }
-    });
+    // Sort by diamonds (descending) - highest first
+    filtered.sort((a, b) => b.diamonds_monthly - a.diamonds_monthly);
 
     return filtered;
-  }, [assignedCreators, searchQuery, sortBy, filterStatus, filterBattle, filterPayout]);
+  }, [assignedCreators, searchQuery, activeStatusTab, filterBattle, filterPayout]);
 
   if (!fontsLoaded || loading || creatorLoading) {
     return (
@@ -918,12 +894,12 @@ export default function ManagerPortalScreen() {
                 <Text style={styles.editButtonText}>Edit Profile</Text>
               </TouchableOpacity>
 
-              {/* POTENTIAL EARNINGS THIS MONTH */}
+              {/* POTENTIAL EARNINGS THIS MONTH - GREEN THEME */}
               <View style={styles.potentialEarningsSection}>
                 <Text style={styles.potentialEarningsTitle}>Potential Earnings This Month</Text>
                 <Text style={styles.potentialEarningsSubtitle}>(Not yet earned)</Text>
                 
-                {/* Progress Bar */}
+                {/* Progress Bar - GREEN */}
                 <View style={styles.earningsProgressContainer}>
                   <View style={styles.earningsProgressBg}>
                     <View 
@@ -935,7 +911,7 @@ export default function ManagerPortalScreen() {
                   </View>
                 </View>
 
-                {/* Projected Amount */}
+                {/* Projected Amount - GREEN */}
                 <View style={styles.projectedAmountContainer}>
                   <Text style={styles.projectedAmountLabel}>Projected Earnings</Text>
                   <Text style={styles.projectedAmount}>
@@ -1081,91 +1057,54 @@ export default function ManagerPortalScreen() {
                 )}
               </View>
 
-              {/* Filters - NO EMOJIS */}
+              {/* STATUS TABS - Replace Sorting */}
+              <View style={styles.statusTabsContainer}>
+                <TouchableOpacity
+                  style={[styles.statusTab, activeStatusTab === 'rookie' && styles.statusTabActive]}
+                  onPress={() => setActiveStatusTab('rookie')}
+                >
+                  <Text style={[styles.statusTabText, activeStatusTab === 'rookie' && styles.statusTabTextActive]}>
+                    Rookies
+                  </Text>
+                  <View style={[styles.statusTabBadge, activeStatusTab === 'rookie' && styles.statusTabBadgeActive]}>
+                    <Text style={[styles.statusTabBadgeText, activeStatusTab === 'rookie' && styles.statusTabBadgeTextActive]}>
+                      {stats.totalRookies}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.statusTab, activeStatusTab === 'silver' && styles.statusTabActive]}
+                  onPress={() => setActiveStatusTab('silver')}
+                >
+                  <Text style={[styles.statusTabText, activeStatusTab === 'silver' && styles.statusTabTextActive]}>
+                    Silvers
+                  </Text>
+                  <View style={[styles.statusTabBadge, activeStatusTab === 'silver' && styles.statusTabBadgeActive]}>
+                    <Text style={[styles.statusTabBadgeText, activeStatusTab === 'silver' && styles.statusTabBadgeTextActive]}>
+                      {stats.totalSilver}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.statusTab, activeStatusTab === 'gold' && styles.statusTabActive]}
+                  onPress={() => setActiveStatusTab('gold')}
+                >
+                  <Text style={[styles.statusTabText, activeStatusTab === 'gold' && styles.statusTabTextActive]}>
+                    Graduated (Gold)
+                  </Text>
+                  <View style={[styles.statusTabBadge, activeStatusTab === 'gold' && styles.statusTabBadgeActive]}>
+                    <Text style={[styles.statusTabBadgeText, activeStatusTab === 'gold' && styles.statusTabBadgeTextActive]}>
+                      {stats.totalGold}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+
+              {/* Additional Filters */}
               <View style={styles.filtersContainer}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll}>
-                  {/* Sort Options */}
-                  <View style={styles.filterGroup}>
-                    <Text style={styles.filterGroupLabel}>Sort:</Text>
-                    <TouchableOpacity 
-                      style={[styles.filterChip, sortBy === 'diamonds_high' && styles.filterChipActive]}
-                      onPress={() => setSortBy('diamonds_high')}
-                    >
-                      <Text style={[styles.filterChipText, sortBy === 'diamonds_high' && styles.filterChipTextActive]}>
-                        High → Low
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={[styles.filterChip, sortBy === 'diamonds_low' && styles.filterChipActive]}
-                      onPress={() => setSortBy('diamonds_low')}
-                    >
-                      <Text style={[styles.filterChipText, sortBy === 'diamonds_low' && styles.filterChipTextActive]}>
-                        Low → High
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={[styles.filterChip, sortBy === 'closest_graduation' && styles.filterChipActive]}
-                      onPress={() => setSortBy('closest_graduation')}
-                    >
-                      <Text style={[styles.filterChipText, sortBy === 'closest_graduation' && styles.filterChipTextActive]}>
-                        Closest
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={[styles.filterChip, sortBy === 'battle_missing' && styles.filterChipActive]}
-                      onPress={() => setSortBy('battle_missing')}
-                    >
-                      <Text style={[styles.filterChipText, sortBy === 'battle_missing' && styles.filterChipTextActive]}>
-                        Missing First
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={[styles.filterChip, sortBy === 'eligible_first' && styles.filterChipActive]}
-                      onPress={() => setSortBy('eligible_first')}
-                    >
-                      <Text style={[styles.filterChipText, sortBy === 'eligible_first' && styles.filterChipTextActive]}>
-                        Eligible First
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Status Filter */}
-                  <View style={styles.filterGroup}>
-                    <Text style={styles.filterGroupLabel}>Status:</Text>
-                    <TouchableOpacity 
-                      style={[styles.filterChip, filterStatus === 'all' && styles.filterChipActive]}
-                      onPress={() => setFilterStatus('all')}
-                    >
-                      <Text style={[styles.filterChipText, filterStatus === 'all' && styles.filterChipTextActive]}>
-                        All
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={[styles.filterChip, filterStatus === 'rookie' && styles.filterChipActive]}
-                      onPress={() => setFilterStatus('rookie')}
-                    >
-                      <Text style={[styles.filterChipText, filterStatus === 'rookie' && styles.filterChipTextActive]}>
-                        Rookie
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={[styles.filterChip, filterStatus === 'silver' && styles.filterChipActive]}
-                      onPress={() => setFilterStatus('silver')}
-                    >
-                      <Text style={[styles.filterChipText, filterStatus === 'silver' && styles.filterChipTextActive]}>
-                        Silver
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={[styles.filterChip, filterStatus === 'gold' && styles.filterChipActive]}
-                      onPress={() => setFilterStatus('gold')}
-                    >
-                      <Text style={[styles.filterChipText, filterStatus === 'gold' && styles.filterChipTextActive]}>
-                        Gold
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
                   {/* Battle Filter */}
                   <View style={styles.filterGroup}>
                     <Text style={styles.filterGroupLabel}>Battle:</Text>
@@ -1244,9 +1183,9 @@ export default function ManagerPortalScreen() {
                     color={colors.textSecondary}
                   />
                   <Text style={styles.emptyStateText}>
-                    {searchQuery || filterStatus !== 'all' || filterBattle !== 'all' || filterPayout !== 'all'
+                    {searchQuery || filterBattle !== 'all' || filterPayout !== 'all'
                       ? 'No creators match your filters'
-                      : 'No creators assigned yet'}
+                      : `No ${activeStatusTab} creators yet`}
                   </Text>
                 </View>
               ) : (
@@ -1375,44 +1314,59 @@ export default function ManagerPortalScreen() {
               </View>
             ) : (
               <View style={styles.rankingsList}>
-                {rankings.map((manager, index) => (
-                  <View key={manager.id} style={styles.rankingItem}>
-                    {/* Rank Badge */}
-                    <View style={[
-                      styles.rankBadge,
-                      index === 0 && styles.rankBadgeGold,
-                      index === 1 && styles.rankBadgeSilver,
-                      index === 2 && styles.rankBadgeBronze,
-                    ]}>
-                      <Text style={[
-                        styles.rankNumber,
-                        index < 3 && styles.rankNumberTop3
+                {rankings.map((manager, index) => {
+                  const managerProfileUrl = manager.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop';
+                  
+                  return (
+                    <TouchableOpacity
+                      key={manager.id}
+                      style={styles.rankingItem}
+                      onPress={() => handleRankingCardPress(manager.tiktok_handle)}
+                      activeOpacity={0.7}
+                    >
+                      {/* Rank Badge */}
+                      <View style={[
+                        styles.rankBadge,
+                        index === 0 && styles.rankBadgeGold,
+                        index === 1 && styles.rankBadgeSilver,
+                        index === 2 && styles.rankBadgeBronze,
                       ]}>
-                        {index + 1}
-                      </Text>
-                    </View>
+                        <Text style={[
+                          styles.rankNumber,
+                          index < 3 && styles.rankNumberTop3
+                        ]}>
+                          {index + 1}
+                        </Text>
+                      </View>
 
-                    {/* Manager Info */}
-                    <View style={styles.rankingInfo}>
-                      <Text style={styles.rankingName}>
-                        {manager.first_name} {manager.last_name}
-                      </Text>
-                      <Text style={styles.rankingCount}>
-                        {manager.graduated_creators} {manager.graduated_creators === 1 ? 'creator' : 'creators'} graduated
-                      </Text>
-                    </View>
-
-                    {/* Trophy Icon for Top 3 */}
-                    {index < 3 && (
-                      <IconSymbol
-                        ios_icon_name="trophy.fill"
-                        android_material_icon_name="emoji-events"
-                        size={24}
-                        color={index === 0 ? '#FFD700' : index === 1 ? '#C0C0C0' : '#CD7F32'}
+                      {/* Profile Picture */}
+                      <Image
+                        source={{ uri: managerProfileUrl }}
+                        style={styles.rankingAvatar}
                       />
-                    )}
-                  </View>
-                ))}
+
+                      {/* Manager Info */}
+                      <View style={styles.rankingInfo}>
+                        <Text style={styles.rankingName}>
+                          {manager.first_name} {manager.last_name}
+                        </Text>
+                        <Text style={styles.rankingCount}>
+                          {manager.graduated_creators} {manager.graduated_creators === 1 ? 'creator' : 'creators'} graduated
+                        </Text>
+                      </View>
+
+                      {/* Trophy Icon for Top 3 */}
+                      {index < 3 && (
+                        <IconSymbol
+                          ios_icon_name="trophy.fill"
+                          android_material_icon_name="emoji-events"
+                          size={24}
+                          color={index === 0 ? '#FFD700' : index === 1 ? '#C0C0C0' : '#CD7F32'}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             )}
           </View>
@@ -1765,13 +1719,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // POTENTIAL EARNINGS SECTION
+  // POTENTIAL EARNINGS SECTION - GREEN THEME
   potentialEarningsSection: {
     backgroundColor: colors.grey,
     borderRadius: 16,
     padding: 20,
     borderWidth: 2,
-    borderColor: colors.warning,
+    borderColor: colors.success,
   },
   potentialEarningsTitle: {
     fontSize: 18,
@@ -1799,7 +1753,7 @@ const styles = StyleSheet.create({
   },
   earningsProgressFill: {
     height: '100%',
-    backgroundColor: colors.warning,
+    backgroundColor: colors.success,
     borderRadius: 6,
   },
   projectedAmountContainer: {
@@ -1814,7 +1768,7 @@ const styles = StyleSheet.create({
   projectedAmount: {
     fontSize: 36,
     fontFamily: 'Poppins_700Bold',
-    color: colors.warning,
+    color: colors.success,
     marginBottom: 4,
   },
   projectedCreatorCount: {
@@ -1963,6 +1917,59 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_500Medium',
     color: colors.text,
   },
+
+  // STATUS TABS
+  statusTabsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  statusTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.grey,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    gap: 6,
+  },
+  statusTabActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  statusTabText: {
+    fontSize: 13,
+    fontFamily: 'Poppins_600SemiBold',
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  statusTabTextActive: {
+    color: '#FFFFFF',
+  },
+  statusTabBadge: {
+    backgroundColor: colors.backgroundAlt,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 24,
+    alignItems: 'center',
+  },
+  statusTabBadgeActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  statusTabBadgeText: {
+    fontSize: 11,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.text,
+  },
+  statusTabBadgeTextActive: {
+    color: '#FFFFFF',
+  },
+
   filtersContainer: {
     marginBottom: 16,
   },
@@ -2149,6 +2156,13 @@ const styles = StyleSheet.create({
   },
   rankNumberTop3: {
     color: '#000000',
+  },
+  rankingAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 2,
+    borderColor: colors.border,
   },
   rankingInfo: {
     flex: 1,
