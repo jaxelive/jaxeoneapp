@@ -97,14 +97,15 @@ export function useBattleFlyerGen() {
         throw new Error('Not authenticated. Please log in again.');
       }
 
+      const session = sessionData.session;
       console.log('✓ Session found');
-      console.log('  - User ID:', sessionData.session.user.id);
-      console.log('  - User email:', sessionData.session.user.email);
-      console.log('  - Token expires at:', new Date(sessionData.session.expires_at! * 1000).toISOString());
-      console.log('  - Access token length:', sessionData.session.access_token.length);
+      console.log('  - User ID:', session.user.id);
+      console.log('  - User email:', session.user.email);
+      console.log('  - Token expires at:', new Date(session.expires_at! * 1000).toISOString());
+      console.log('  - Access token (first 20 chars):', session.access_token.substring(0, 20) + '...');
 
       // Check if token is about to expire (within 5 minutes)
-      const expiresAt = sessionData.session.expires_at! * 1000;
+      const expiresAt = session.expires_at! * 1000;
       const now = Date.now();
       const timeUntilExpiry = expiresAt - now;
       const minutesUntilExpiry = Math.floor(timeUntilExpiry / 60000);
@@ -120,7 +121,9 @@ export function useBattleFlyerGen() {
           throw new Error('Session expired. Please log out and log back in.');
         }
         
-        console.log('✓ Token refreshed successfully');
+        if (refreshData?.session) {
+          console.log('✓ Token refreshed successfully');
+        }
       }
 
       console.log('Step 2: Creating FormData...');
@@ -143,10 +146,13 @@ export function useBattleFlyerGen() {
       console.log('Step 3: Calling Edge Function...');
       console.log('  - Function name: generate-battle-flyer');
       console.log('  - Using supabase.functions.invoke()');
+      console.log('  - Supabase client should automatically attach JWT from session');
 
       const startTime = Date.now();
 
       // Use supabase.functions.invoke which automatically includes the JWT
+      // The Supabase client will automatically attach the Authorization header
+      // with the JWT token from the current session
       const { data, error } = await supabase.functions.invoke('generate-battle-flyer', {
         body: form,
       });
@@ -157,7 +163,8 @@ export function useBattleFlyerGen() {
       if (error) {
         console.error('❌ Edge function error:', error);
         console.error('  - Error message:', error.message);
-        console.error('  - Error details:', JSON.stringify(error, null, 2));
+        console.error('  - Error context:', error.context);
+        console.error('  - Full error:', JSON.stringify(error, null, 2));
         
         // Check for specific error types
         if (error.message?.includes('GEMINI_API_KEY')) {
@@ -180,7 +187,7 @@ export function useBattleFlyerGen() {
           throw new Error('Network error. Please check your internet connection and try again.');
         }
         
-        const errorMessage = error.message || error.details || 'Failed to generate flyer';
+        const errorMessage = error.message || error.context?.error || 'Failed to generate flyer';
         throw new Error(errorMessage);
       }
 

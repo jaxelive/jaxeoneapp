@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Image, Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,6 +23,42 @@ export default function AIFlyersScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [generatedFlyerUrl, setGeneratedFlyerUrl] = useState<string | null>(null);
+  const [sessionStatus, setSessionStatus] = useState<string>('Checking...');
+
+  // Check session status on mount
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          setSessionStatus(`Error: ${sessionError.message}`);
+        } else if (!sessionData?.session) {
+          setSessionStatus('No session - Please log in');
+        } else {
+          setSessionStatus(`Logged in as ${sessionData.session.user.email}`);
+        }
+      } catch (e: any) {
+        setSessionStatus(`Check failed: ${e.message}`);
+      }
+    };
+
+    checkSession();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[AI Flyers] Auth state changed:', event);
+      if (session) {
+        setSessionStatus(`Logged in as ${session.user.email}`);
+      } else {
+        setSessionStatus('No session - Please log in');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const runDiagnostics = async () => {
     console.log('=== RUNNING DIAGNOSTICS ===');
@@ -44,7 +80,14 @@ export default function AIFlyersScreen() {
         diagnostics.checks.push('❌ No active session - Please log in');
       } else {
         diagnostics.checks.push(`✓ Session active for ${sessionData.session.user.email}`);
+        diagnostics.checks.push(`✓ User ID: ${sessionData.session.user.id}`);
         diagnostics.checks.push(`✓ Token expires: ${new Date(sessionData.session.expires_at! * 1000).toLocaleString()}`);
+        
+        // Check token expiry
+        const expiresAt = sessionData.session.expires_at! * 1000;
+        const now = Date.now();
+        const minutesUntilExpiry = Math.floor((expiresAt - now) / 60000);
+        diagnostics.checks.push(`✓ Token valid for ${minutesUntilExpiry} more minutes`);
       }
 
       // Check 2: Edge Function availability
@@ -59,6 +102,8 @@ export default function AIFlyersScreen() {
             diagnostics.checks.push('✓ Edge Function is reachable (returned expected validation error)');
           } else if (funcError.message?.includes('GEMINI_API_KEY')) {
             diagnostics.checks.push('❌ GEMINI_API_KEY not configured in Supabase');
+          } else if (funcError.message?.includes('401') || funcError.message?.includes('Not authenticated')) {
+            diagnostics.checks.push('❌ Edge Function authentication failed - Session may not be passed correctly');
           } else {
             diagnostics.checks.push(`⚠️ Edge Function error: ${funcError.message}`);
           }
@@ -104,7 +149,6 @@ export default function AIFlyersScreen() {
         diagnostics.checks.join('\n\n'),
         [
           { text: 'Copy to Clipboard', onPress: () => {
-            // In a real app, you'd use Clipboard API here
             console.log('Diagnostics:', JSON.stringify(diagnostics, null, 2));
           }},
           { text: 'OK' }
@@ -277,6 +321,17 @@ export default function AIFlyersScreen() {
           <Text style={styles.headerSubtitle}>Create epic medieval warrior battle flyers</Text>
           <Text style={styles.headerNote}>Powered by Google Gemini AI</Text>
         </LinearGradient>
+
+        {/* Session Status */}
+        <View style={styles.sessionStatus}>
+          <IconSymbol 
+            ios_icon_name={sessionStatus.includes('Logged in') ? 'checkmark.circle.fill' : 'exclamationmark.triangle.fill'} 
+            android_material_icon_name={sessionStatus.includes('Logged in') ? 'check-circle' : 'warning'} 
+            size={16} 
+            color={sessionStatus.includes('Logged in') ? '#4CAF50' : '#FF9800'} 
+          />
+          <Text style={styles.sessionStatusText}>{sessionStatus}</Text>
+        </View>
 
         {/* Diagnostic Button */}
         <TouchableOpacity style={styles.diagnosticButton} onPress={runDiagnostics}>
@@ -530,6 +585,23 @@ const styles = StyleSheet.create({
     color: colors.textTertiary,
     textAlign: 'center',
     marginTop: 8,
+  },
+  sessionStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sessionStatusText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.textSecondary,
   },
   diagnosticButton: {
     flexDirection: 'row',
