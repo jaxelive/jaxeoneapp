@@ -102,15 +102,6 @@ export default function AIFlyersScreen() {
     if (result) {
       setGeneratedFlyerUrl(result.url);
       Alert.alert('Success', 'Your battle flyer has been forged!');
-    } else if (error) {
-      // Show detailed error message
-      Alert.alert(
-        'Generation Failed', 
-        error.includes('GEMINI_API_KEY') 
-          ? 'The AI service is not configured. Please contact support to set up the GEMINI_API_KEY.'
-          : error,
-        [{ text: 'OK' }]
-      );
     }
   };
 
@@ -192,11 +183,19 @@ export default function AIFlyersScreen() {
         {/* Error Display */}
         {error && !loading && (
           <View style={styles.errorCard}>
-            <IconSymbol ios_icon_name="exclamationmark.triangle.fill" android_material_icon_name="error" size={24} color="#FF6B6B" />
+            <View style={styles.errorHeader}>
+              <IconSymbol ios_icon_name="exclamationmark.triangle.fill" android_material_icon_name="error" size={24} color="#FF6B6B" />
+              <Text style={styles.errorTitle}>Generation Failed</Text>
+            </View>
             <Text style={styles.errorText}>{error}</Text>
             {error.includes('GEMINI_API_KEY') && (
               <Text style={styles.errorHint}>
                 The administrator needs to configure the GEMINI_API_KEY environment variable in Supabase Edge Functions.
+              </Text>
+            )}
+            {error.includes('Not authenticated') && (
+              <Text style={styles.errorHint}>
+                Try logging out and logging back in. If the problem persists, contact support.
               </Text>
             )}
           </View>
@@ -417,18 +416,29 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderWidth: 1,
     borderColor: '#FF6B6B40',
+    gap: 12,
+  },
+  errorHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
+  },
+  errorTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FF6B6B',
   },
   errorText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#FF6B6B',
+    lineHeight: 20,
   },
   errorHint: {
     fontSize: 12,
     fontWeight: '400',
     color: colors.textSecondary,
-    marginTop: 4,
+    lineHeight: 18,
   },
   section: {
     marginBottom: 24,

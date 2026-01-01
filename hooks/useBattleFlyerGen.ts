@@ -70,7 +70,7 @@ export function useBattleFlyerGen() {
     try {
       console.log('Getting Supabase session...');
       
-      // Get the current session
+      // Get the current session to verify user is authenticated
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError) {
@@ -83,12 +83,7 @@ export function useBattleFlyerGen() {
         throw new Error('Not authenticated. Please log in again.');
       }
 
-      const accessToken = sessionData.session.access_token;
-      console.log('Session found, access token exists:', !!accessToken);
-
-      if (!accessToken) {
-        throw new Error('Invalid session. Please log in again.');
-      }
+      console.log('Session found, user ID:', sessionData.session.user.id);
 
       console.log('Creating FormData...');
       const form = new FormData();
@@ -108,14 +103,10 @@ export function useBattleFlyerGen() {
 
       console.log('Calling edge function via supabase.functions.invoke...');
 
-      // Use supabase.functions.invoke with proper headers
-      // The invoke method should automatically include the Authorization header
+      // Use supabase.functions.invoke - it automatically includes the auth token
+      // No need to manually add Authorization header
       const { data, error } = await supabase.functions.invoke('generate-battle-flyer', {
         body: form,
-        headers: {
-          // Explicitly pass the authorization header
-          'Authorization': `Bearer ${accessToken}`,
-        },
       });
 
       if (error) {
