@@ -502,22 +502,7 @@ export default function HomeScreen() {
                     </LinearGradient>
                     <Text style={styles.toolButtonText}>Battles</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.toolButton}>
-                    <LinearGradient
-                      colors={['#E9D5FF', '#D8B4FE']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.toolIconContainer}
-                    >
-                      <IconSymbol 
-                        ios_icon_name="wand.and.stars" 
-                        android_material_icon_name="auto-awesome" 
-                        size={24} 
-                        color={colors.primary} 
-                      />
-                    </LinearGradient>
-                    <Text style={styles.toolButtonText}>Flyer AI</Text>
-                  </TouchableOpacity>
+
                 </View>
               </View>
             </CardPressable>
