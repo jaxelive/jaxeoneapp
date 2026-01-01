@@ -193,10 +193,25 @@ export default function AIFlyersScreen() {
                 The administrator needs to configure the GEMINI_API_KEY environment variable in Supabase Edge Functions.
               </Text>
             )}
-            {error.includes('Not authenticated') && (
-              <Text style={styles.errorHint}>
-                Try logging out and logging back in. If the problem persists, contact support.
-              </Text>
+            {error.includes('Authentication') && (
+              <View style={styles.errorActions}>
+                <Text style={styles.errorHint}>
+                  Your session may have expired. Try logging out and logging back in.
+                </Text>
+                <TouchableOpacity 
+                  style={styles.retryButton}
+                  onPress={() => {
+                    reset();
+                    Alert.alert(
+                      'Session Issue',
+                      'Please log out and log back in to refresh your session, then try again.',
+                      [{ text: 'OK' }]
+                    );
+                  }}
+                >
+                  <Text style={styles.retryButtonText}>Dismiss</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         )}
@@ -439,6 +454,24 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: colors.textSecondary,
     lineHeight: 18,
+  },
+  errorActions: {
+    gap: 12,
+    marginTop: 4,
+  },
+  retryButton: {
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  retryButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
   },
   section: {
     marginBottom: 24,

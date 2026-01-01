@@ -84,6 +84,7 @@ export function useBattleFlyerGen() {
       }
 
       console.log('Session found, user ID:', sessionData.session.user.id);
+      console.log('Access token present:', !!sessionData.session.access_token);
 
       console.log('Creating FormData...');
       const form = new FormData();
@@ -103,8 +104,7 @@ export function useBattleFlyerGen() {
 
       console.log('Calling edge function via supabase.functions.invoke...');
 
-      // Use supabase.functions.invoke - it automatically includes the auth token
-      // No need to manually add Authorization header
+      // Use supabase.functions.invoke - it automatically includes the auth token from the current session
       const { data, error } = await supabase.functions.invoke('generate-battle-flyer', {
         body: form,
       });
@@ -117,7 +117,7 @@ export function useBattleFlyerGen() {
           throw new Error('The AI service is not configured. Please contact support to set up the GEMINI_API_KEY.');
         }
         
-        if (error.message?.includes('Unauthorized') || error.message?.includes('401')) {
+        if (error.message?.includes('Unauthorized') || error.message?.includes('401') || error.message?.includes('Not authenticated')) {
           throw new Error('Authentication failed. Please log out and log back in.');
         }
         
