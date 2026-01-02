@@ -95,6 +95,13 @@ interface LiveEvent {
   time_zone: string | null;
 }
 
+interface MostRecentCourse {
+  id: string;
+  title: string;
+  cover_image_url: string | null;
+  total_videos: number;
+}
+
 export default function HomeScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   
@@ -124,6 +131,7 @@ export default function HomeScreen() {
   const [isRegisteredForEvent, setIsRegisteredForEvent] = useState(false);
   const [registeringEventId, setRegisteringEventId] = useState<string | null>(null);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+  const [mostRecentCourse, setMostRecentCourse] = useState<MostRecentCourse | null>(null);
   const hasInitializedRef = useRef(false);
 
   useEffect(() => {
@@ -274,17 +282,51 @@ export default function HomeScreen() {
     if (!creator) return;
 
     try {
-      // Get total number of videos in the course
-      const { data: videosData, error: videosError } = await supabase
-        .from('course_videos')
-        .select('id');
+      // Get the most recent published course with video count
+      const { data: courseData, error: courseError } = await supabase
+        .from('courses')
+        .select(`
+          id,
+          title,
+          cover_image_url,
+          created_at
+        `)
+        .eq('status', 'published')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
 
-      if (videosError && videosError.code !== 'PGRST116') {
-        console.error('[HomeScreen] Error fetching course videos:', videosError);
+      if (courseError && courseError.code !== 'PGRST116') {
+        console.error('[HomeScreen] Error fetching course:', courseError);
       }
 
-      const totalVideos = videosData?.length || 6;
-      setTotalCourseVideos(totalVideos);
+      if (courseData) {
+        // Get video count for this course
+        const { data: videosData, error: videosError } = await supabase
+          .from('course_videos')
+          .select('id')
+          .eq('course_id', courseData.id);
+
+        if (videosError && videosError.code !== 'PGRST116') {
+          console.error('[HomeScreen] Error fetching course videos:', videosError);
+        }
+
+        const totalVideos = videosData?.length || 0;
+        setTotalCourseVideos(totalVideos);
+        
+        setMostRecentCourse({
+          id: courseData.id,
+          title: courseData.title,
+          cover_image_url: courseData.cover_image_url,
+          total_videos: totalVideos,
+        });
+
+        console.log('[HomeScreen] Most recent course:', {
+          title: courseData.title,
+          totalVideos,
+          coverImage: courseData.cover_image_url,
+        });
+      }
 
       // Fetch completed videos using creator_handle
       const { data: educationData, error: educationError } = await supabase
@@ -299,26 +341,26 @@ export default function HomeScreen() {
       }
 
       const completedVideos = educationData?.length || 0;
-      console.log('[HomeScreen] Education progress:', completedVideos, '/', totalVideos);
+      console.log('[HomeScreen] Education progress:', completedVideos, '/', totalCourseVideos);
       setEducationProgress(completedVideos);
 
       // Check if course is completed and when
-      const { data: courseData, error: courseError } = await supabase
+      const { data: courseProgressData, error: courseProgressError } = await supabase
         .from('user_course_progress')
         .select('completed_at')
         .eq('user_id', creator.id)
         .eq('completed', true)
         .single();
 
-      if (courseError && courseError.code !== 'PGRST116') {
-        console.error('[HomeScreen] Error fetching course completion:', courseError);
+      if (courseProgressError && courseProgressError.code !== 'PGRST116') {
+        console.error('[HomeScreen] Error fetching course completion:', courseProgressError);
       }
 
-      if (courseData?.completed_at) {
-        setAcademyCompletedAt(courseData.completed_at);
+      if (courseProgressData?.completed_at) {
+        setAcademyCompletedAt(courseProgressData.completed_at);
         
         // Check if 5 days have passed since completion
-        const completedDate = new Date(courseData.completed_at);
+        const completedDate = new Date(courseProgressData.completed_at);
         const fiveDaysLater = new Date(completedDate);
         fiveDaysLater.setDate(fiveDaysLater.getDate() + 5);
         const now = new Date();
@@ -328,7 +370,7 @@ export default function HomeScreen() {
           const { data: newVideos, error: newVideosError } = await supabase
             .from('course_videos')
             .select('id')
-            .gt('created_at', courseData.completed_at);
+            .gt('created_at', courseProgressData.completed_at);
 
           if (newVideosError && newVideosError.code !== 'PGRST116') {
             console.error('[HomeScreen] Error checking new videos:', newVideosError);
@@ -1021,7 +1063,7 @@ export default function HomeScreen() {
 
                     <View style={styles.academyContent}>
                       <View style={styles.academyLeft}>
-                        <Text style={styles.academyProgressLabel}>Video Progress</Text>
+                        <Text style={styles.academyProgressLabel}>Course Progress</Text>
                         <View style={styles.academyProgressValueRow}>
                           <AnimatedNumber 
                             value={educationProgress} 
@@ -1072,6 +1114,14 @@ export default function HomeScreen() {
 
                       <View style={styles.academyRight}>
                         <View style={styles.videoThumbnail}>
+                          {/* Course Thumbnail with 60% opacity */}
+                          {mostRecentCourse?.cover_image_url && (
+                            <Image
+                              source={{ uri: mostRecentCourse.cover_image_url }}
+                              style={styles.courseThumbnailImage}
+                            />
+                          )}
+                          {/* Play button on top */}
                           <View style={styles.playIconContainer}>
                             <IconSymbol 
                               ios_icon_name="play.fill" 
@@ -2013,6 +2063,14 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  courseThumbnailImage: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    opacity: 0.6,
   },
   playIconContainer: {
     width: 48,
@@ -2021,6 +2079,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 1,
   },
 
   // MANAGER CARD
