@@ -18,6 +18,7 @@ import {
 import { colors } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { useCreatorData } from "@/hooks/useCreatorData";
+import { useVideoProgress } from "@/hooks/useVideoProgress";
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold, Poppins_800ExtraBold } from '@expo-google-fonts/poppins';
 import { supabase } from "@/app/integrations/supabase/client";
 import { RotatingCard } from "@/components/RotatingCard";
@@ -116,7 +117,6 @@ export default function HomeScreen() {
   const { creator, loading, error, refetch } = useCreatorData(CREATOR_HANDLE);
   const [nextBattle, setNextBattle] = useState<any>(null);
   const [challengeProgress, setChallengeProgress] = useState<any>(null);
-  const [educationProgress, setEducationProgress] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [chatDrawerVisible, setChatDrawerVisible] = useState(false);
@@ -133,6 +133,12 @@ export default function HomeScreen() {
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
   const [mostRecentCourse, setMostRecentCourse] = useState<MostRecentCourse | null>(null);
   const hasInitializedRef = useRef(false);
+
+  // Use video progress hook
+  const { videoProgress, refetch: refetchVideoProgress } = useVideoProgress();
+
+  // Calculate education progress from video progress
+  const educationProgress = videoProgress.filter(p => p.completed).length;
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -151,6 +157,7 @@ export default function HomeScreen() {
     await fetchTopCreators();
     await fetchFeaturedLiveEvent();
     await checkUnreadNotifications();
+    await refetchVideoProgress();
     setRefreshing(false);
   };
 
@@ -327,22 +334,6 @@ export default function HomeScreen() {
           coverImage: courseData.cover_image_url,
         });
       }
-
-      // Fetch completed videos using creator_handle
-      const { data: educationData, error: educationError } = await supabase
-        .from('user_video_progress')
-        .select('*')
-        .eq('creator_handle', CREATOR_HANDLE)
-        .eq('completed', true);
-
-      if (educationError && educationError.code !== 'PGRST116') {
-        console.error('[HomeScreen] Error fetching education data:', educationError);
-        return;
-      }
-
-      const completedVideos = educationData?.length || 0;
-      console.log('[HomeScreen] Education progress:', completedVideos, '/', totalCourseVideos);
-      setEducationProgress(completedVideos);
 
       // Check if course is completed and when
       const { data: courseProgressData, error: courseProgressError } = await supabase
@@ -535,13 +526,14 @@ export default function HomeScreen() {
         fetchTopCreators(),
         fetchFeaturedLiveEvent(),
         checkUnreadNotifications(),
+        refetchVideoProgress(),
       ]).then(() => {
         console.log('[HomeScreen] All data initialized successfully');
       }).catch((err) => {
         console.error('[HomeScreen] Error during initialization:', err);
       });
     }
-  }, [creator, fetchBattleData, fetchChallengeData, fetchEducationData, fetchTopCreators, fetchFeaturedLiveEvent, checkUnreadNotifications]);
+  }, [creator, fetchBattleData, fetchChallengeData, fetchEducationData, fetchTopCreators, fetchFeaturedLiveEvent, checkUnreadNotifications, refetchVideoProgress]);
 
   const handleRegisterForEvent = async (eventId: string) => {
     if (registeringEventId) return;

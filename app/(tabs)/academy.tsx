@@ -16,6 +16,7 @@ import { Stack, router } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/app/integrations/supabase/client';
 import { useCreatorData } from '@/hooks/useCreatorData';
+import { useVideoProgress } from '@/hooks/useVideoProgress';
 import { IconSymbol } from '@/components/IconSymbol';
 import { formatTo12Hour } from '@/utils/timeFormat';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
@@ -63,13 +64,6 @@ interface Course {
   contentItems: ContentItem[];
 }
 
-interface VideoProgress {
-  video_id: string;
-  completed: boolean;
-  watched_seconds: number;
-  progress_percentage: number;
-}
-
 interface QuizAttempt {
   quiz_id: string;
   passed: boolean;
@@ -108,7 +102,6 @@ export default function AcademyScreen() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [academyVideos, setAcademyVideos] = useState<AcademyContentItem[]>([]);
   const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null);
-  const [videoProgress, setVideoProgress] = useState<VideoProgress[]>([]);
   const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
   const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
   const [registrations, setRegistrations] = useState<LiveEventRegistration[]>([]);
@@ -116,6 +109,19 @@ export default function AcademyScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [registeringEventId, setRegisteringEventId] = useState<string | null>(null);
+
+  // Get all course videos for progress calculation
+  const allCourseVideos = courses.flatMap(course =>
+    course.contentItems
+      .filter(item => item.content_type === 'video' && item.video)
+      .map(item => ({
+        id: item.video!.id,
+        duration_seconds: item.video!.duration_seconds,
+      }))
+  );
+
+  // Use the video progress hook
+  const { videoProgress, refetch: refetchVideoProgress, isVideoWatched } = useVideoProgress(allCourseVideos);
 
   useEffect(() => {
     console.log('[Academy] Component mounted for creator:', CREATOR_HANDLE);
@@ -257,49 +263,6 @@ export default function AcademyScreen() {
         setCourses(coursesWithContent);
       }
 
-      // Fetch video progress for this creator using creator_handle
-      console.log('[Academy] Fetching video progress...');
-      const { data: progressData, error: progressError } = await supabase
-        .from('user_video_progress')
-        .select('*')
-        .eq('creator_handle', CREATOR_HANDLE);
-
-      if (progressError) {
-        console.error('[Academy] Error fetching video progress:', progressError);
-      } else {
-        console.log('[Academy] Video progress fetched:', progressData?.length || 0);
-        
-        // Calculate progress percentage for each video
-        const progressWithPercentage = progressData?.map((p: any) => {
-          // Find the video to get duration
-          let duration = 0;
-          
-          // Check in courses
-          for (const course of courses) {
-            const videoItem = course.contentItems.find(
-              item => item.content_type === 'video' && item.video?.id === p.video_id
-            );
-            if (videoItem?.video?.duration_seconds) {
-              duration = videoItem.video.duration_seconds;
-              break;
-            }
-          }
-          
-          const percentage = duration > 0 
-            ? Math.min(100, Math.round((p.watched_seconds / duration) * 100))
-            : 0;
-          
-          return {
-            video_id: p.video_id,
-            completed: p.completed || false,
-            watched_seconds: p.watched_seconds || 0,
-            progress_percentage: percentage,
-          };
-        }) || [];
-        
-        setVideoProgress(progressWithPercentage);
-      }
-
       // Fetch quiz attempts for this creator
       console.log('[Academy] Fetching quiz attempts...');
       const { data: quizData, error: quizError } = await supabase
@@ -331,6 +294,10 @@ export default function AcademyScreen() {
       });
 
       setQuizAttempts(latestAttempts);
+      
+      // Refetch video progress
+      await refetchVideoProgress();
+      
       console.log('[Academy] Data fetch completed successfully');
     } catch (error: any) {
       console.error('[Academy] Error fetching academy data:', error);
@@ -412,8 +379,7 @@ export default function AcademyScreen() {
 
   const isItemCompleted = (item: ContentItem): boolean => {
     if (item.content_type === 'video' && item.video) {
-      const progress = videoProgress.find((p) => p.video_id === item.video!.id);
-      return progress?.completed || false;
+      return isVideoWatched(item.video.id);
     }
 
     if (item.content_type === 'quiz' && item.quiz) {
@@ -422,15 +388,6 @@ export default function AcademyScreen() {
     }
 
     return false;
-  };
-
-  const isAcademyVideoCompleted = (videoId: string): boolean => {
-    const progress = videoProgress.find((p) => p.video_id === videoId);
-    return progress?.completed || false;
-  };
-
-  const getVideoProgress = (videoId: string): VideoProgress | undefined => {
-    return videoProgress.find((p) => p.video_id === videoId);
   };
 
   const handleItemPress = async (course: Course, item: ContentItem, index: number) => {
@@ -452,10 +409,7 @@ export default function AcademyScreen() {
       // Check if all videos are watched before allowing quiz access
       const allVideosWatched = course.contentItems
         .filter(ci => ci.content_type === 'video')
-        .every(ci => {
-          const progress = videoProgress.find(p => p.video_id === ci.video!.id);
-          return progress?.completed || false;
-        });
+        .every(ci => isVideoWatched(ci.video!.id));
 
       if (!allVideosWatched) {
         Alert.alert(
@@ -494,26 +448,9 @@ export default function AcademyScreen() {
     }
   };
 
-  const handleAcademyVideoPress = async (video: AcademyContentItem) => {
-    console.log('[Academy] Opening creator journey video:', video.id);
-    
-    router.push({
-      pathname: '/(tabs)/video-player',
-      params: { 
-        videoId: video.id,
-        videoUrl: video.video_url!,
-        title: video.title,
-        description: video.description || '',
-      },
-    });
-  };
-
   const getCourseProgress = (course: Course) => {
     const videoItems = course.contentItems.filter(item => item.content_type === 'video');
-    const watchedVideos = videoItems.filter(item => {
-      const progress = videoProgress.find(p => p.video_id === item.video!.id);
-      return progress?.completed || false;
-    }).length;
+    const watchedVideos = videoItems.filter(item => isVideoWatched(item.video!.id)).length;
     const totalVideos = videoItems.length;
     return { completed: watchedVideos, total: totalVideos };
   };
@@ -798,18 +735,12 @@ export default function AcademyScreen() {
                       ) : (
                         course.contentItems.map((item, index) => {
                           const isCompleted = isItemCompleted(item);
-                          const progress = item.content_type === 'video' && item.video 
-                            ? getVideoProgress(item.video.id)
-                            : undefined;
                           const videoNumber = item.content_type === 'video' ? getVideoNumber(course, item) : 0;
 
                           // Check if quiz is locked
                           const isQuizLocked = item.content_type === 'quiz' && !course.contentItems
                             .filter(ci => ci.content_type === 'video')
-                            .every(ci => {
-                              const p = videoProgress.find(vp => vp.video_id === ci.video!.id);
-                              return p?.completed || false;
-                            });
+                            .every(ci => isVideoWatched(ci.video!.id));
 
                           // Get quiz attempt for this quiz
                           const quizAttempt = item.content_type === 'quiz' && item.quiz
