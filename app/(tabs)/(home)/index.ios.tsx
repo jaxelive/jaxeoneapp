@@ -1,6 +1,6 @@
 
-import React, { useRef, useEffect } from "react";
-import { Stack } from "expo-router";
+import React, { useRef, useEffect, useState, useCallback } from "react";
+import { Stack, router } from "expo-router";
 import { 
   ScrollView, 
   StyleSheet, 
@@ -11,6 +11,7 @@ import {
   Animated,
   Dimensions,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from "@/styles/commonStyles";
@@ -19,12 +20,21 @@ import { HeaderRightButton, HeaderLeftButton } from "@/components/HeaderButtons"
 import { useCreatorData } from "@/hooks/useCreatorData";
 import { AnimatedCard } from "@/components/AnimatedCard";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
+import { AnimatedProgressBar } from "@/components/AnimatedProgressBar";
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
+import { supabase } from "@/app/integrations/supabase/client";
 
 const { width } = Dimensions.get('window');
 
 // Hardcoded creator handle - no authentication needed
 const CREATOR_HANDLE = 'avelezsanti';
+
+interface MostRecentCourse {
+  id: string;
+  title: string;
+  cover_image_url: string | null;
+  total_videos: number;
+}
 
 export default function HomeScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -38,6 +48,10 @@ export default function HomeScreen() {
   });
   
   const { creator, loading, error, stats, refetch } = useCreatorData(CREATOR_HANDLE);
+  const [refreshing, setRefreshing] = useState(false);
+  const [educationProgress, setEducationProgress] = useState(0);
+  const [totalCourseVideos, setTotalCourseVideos] = useState(0);
+  const [mostRecentCourse, setMostRecentCourse] = useState<MostRecentCourse | null>(null);
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -58,6 +72,89 @@ export default function HomeScreen() {
     outputRange: [1, 0.85],
     extrapolate: 'clamp',
   });
+
+  const fetchEducationData = useCallback(async () => {
+    if (!creator) return;
+
+    try {
+      // Get the most recent published course with video count
+      const { data: courseData, error: courseError } = await supabase
+        .from('courses')
+        .select(`
+          id,
+          title,
+          cover_image_url,
+          created_at
+        `)
+        .eq('status', 'published')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (courseError && courseError.code !== 'PGRST116') {
+        console.error('[HomeScreen] Error fetching course:', courseError);
+      }
+
+      if (courseData) {
+        // Get video count for this course
+        const { data: videosData, error: videosError } = await supabase
+          .from('course_videos')
+          .select('id')
+          .eq('course_id', courseData.id);
+
+        if (videosError && videosError.code !== 'PGRST116') {
+          console.error('[HomeScreen] Error fetching course videos:', videosError);
+        }
+
+        const totalVideos = videosData?.length || 0;
+        setTotalCourseVideos(totalVideos);
+        
+        setMostRecentCourse({
+          id: courseData.id,
+          title: courseData.title,
+          cover_image_url: courseData.cover_image_url,
+          total_videos: totalVideos,
+        });
+
+        console.log('[HomeScreen] Most recent course:', {
+          title: courseData.title,
+          totalVideos,
+          coverImage: courseData.cover_image_url,
+        });
+      }
+
+      // Fetch completed videos using creator_handle
+      const { data: educationData, error: educationError } = await supabase
+        .from('user_video_progress')
+        .select('*')
+        .eq('creator_handle', CREATOR_HANDLE)
+        .eq('completed', true);
+
+      if (educationError && educationError.code !== 'PGRST116') {
+        console.error('[HomeScreen] Error fetching education data:', educationError);
+        return;
+      }
+
+      const completedVideos = educationData?.length || 0;
+      console.log('[HomeScreen] Education progress:', completedVideos, '/', totalVideos);
+      setEducationProgress(completedVideos);
+    } catch (error: any) {
+      console.error('[HomeScreen] Unexpected error fetching education data:', error);
+    }
+  }, [creator]);
+
+  useEffect(() => {
+    if (creator) {
+      fetchEducationData();
+    }
+  }, [creator, fetchEducationData]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refetch();
+    await fetchEducationData();
+    setRefreshing(false);
+  };
 
   if (loading || !fontsLoaded) {
     return (
@@ -145,6 +242,14 @@ export default function HomeScreen() {
             { useNativeDriver: true }
           )}
           scrollEventThrottle={16}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+              colors={[colors.primary]}
+            />
+          }
         >
           <Animated.View 
             style={[
@@ -266,6 +371,93 @@ export default function HomeScreen() {
                   <View style={styles.milestoneRow}>
                     <Text style={styles.milestoneText}>Target</Text>
                     <Text style={styles.milestoneValue}>{(stats.targetAmount / 1000).toFixed(0)}k 💎</Text>
+                  </View>
+                </View>
+              </View>
+            </CardPressable>
+          </AnimatedCard>
+
+          {/* ACADEMY CARD - WITH THUMBNAIL UPDATE */}
+          <AnimatedCard delay={250} animationType="fadeSlide">
+            <CardPressable onPress={() => router.push('/(tabs)/academy')}>
+              <View style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.cardEmoji}>🎓</Text>
+                  <View style={styles.cardHeaderText}>
+                    <Text style={styles.cardTitleLarge}>Academy</Text>
+                    <Text style={styles.cardSubtitle}>Continue your learning journey</Text>
+                  </View>
+                </View>
+                <View style={styles.academyContent}>
+                  <View style={styles.academyLeft}>
+                    <Text style={styles.academyProgressLabel}>Course Progress</Text>
+                    <View style={styles.academyProgressValueRow}>
+                      <AnimatedNumber 
+                        value={educationProgress} 
+                        style={styles.academyProgressValue}
+                        formatNumber={false}
+                        delay={400}
+                        duration={800}
+                      />
+                      <Text style={styles.academyProgressValue}>/{totalCourseVideos}</Text>
+                    </View>
+                    
+                    <AnimatedProgressBar
+                      percentage={(educationProgress / totalCourseVideos) * 100}
+                      height={6}
+                      containerStyle={{ marginBottom: 12 }}
+                      delay={500}
+                      duration={1000}
+                    />
+
+                    <View style={styles.quizStatus}>
+                      {educationProgress < totalCourseVideos ? (
+                        <>
+                          <IconSymbol 
+                            ios_icon_name="lock.fill" 
+                            android_material_icon_name="lock" 
+                            size={14} 
+                            color="#A0A0A0" 
+                          />
+                          <Text style={styles.quizStatusText}>Quiz: Locked</Text>
+                        </>
+                      ) : (
+                        <>
+                          <IconSymbol 
+                            ios_icon_name="checkmark.circle.fill" 
+                            android_material_icon_name="check-circle" 
+                            size={14} 
+                            color="#10B981" 
+                          />
+                          <Text style={styles.quizStatusText}>Quiz: Unlocked</Text>
+                        </>
+                      )}
+                    </View>
+
+                    <TouchableOpacity>
+                      <Text style={styles.continueLink}>Continue learning</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.academyRight}>
+                    <View style={styles.videoThumbnail}>
+                      {/* Course Thumbnail with 60% opacity */}
+                      {mostRecentCourse?.cover_image_url && (
+                        <Image
+                          source={{ uri: mostRecentCourse.cover_image_url }}
+                          style={styles.courseThumbnailImage}
+                        />
+                      )}
+                      {/* Play button on top */}
+                      <View style={styles.playIconContainer}>
+                        <IconSymbol 
+                          ios_icon_name="play.fill" 
+                          android_material_icon_name="play-arrow" 
+                          size={32} 
+                          color="#FFFFFF" 
+                        />
+                      </View>
+                    </View>
                   </View>
                 </View>
               </View>
@@ -502,7 +694,6 @@ export default function HomeScreen() {
                     </LinearGradient>
                     <Text style={styles.toolButtonText}>Battles</Text>
                   </TouchableOpacity>
-
                 </View>
               </View>
             </CardPressable>
@@ -821,6 +1012,75 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: 'Poppins_600SemiBold',
     color: colors.text,
+  },
+  // ACADEMY CARD STYLES
+  academyContent: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  academyLeft: {
+    flex: 1,
+  },
+  academyProgressLabel: {
+    fontSize: 13,
+    fontFamily: 'Poppins_500Medium',
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  academyProgressValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 12,
+  },
+  academyProgressValue: {
+    fontSize: 18,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.text,
+  },
+  quizStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  quizStatusText: {
+    fontSize: 12,
+    fontFamily: 'Poppins_500Medium',
+    color: colors.textSecondary,
+  },
+  continueLink: {
+    fontSize: 13,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.primary,
+  },
+  academyRight: {
+    width: 100,
+    height: 100,
+  },
+  videoThumbnail: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.grey,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  courseThumbnailImage: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    opacity: 0.6,
+  },
+  playIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
   },
   missionsGrid: {
     flexDirection: 'row',
