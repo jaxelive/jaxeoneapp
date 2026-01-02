@@ -1,12 +1,5 @@
 
-import { colors } from '@/styles/commonStyles';
-import { useVideoProgress } from '@/hooks/useVideoProgress';
-import { formatTo12Hour } from '@/utils/timeFormat';
-import { supabase } from '@/app/integrations/supabase/client';
-import { IconSymbol } from '@/components/IconSymbol';
-import { Stack, router, useFocusEffect } from 'expo-router';
 import React, { useState, useEffect, useCallback } from 'react';
-import { useCreatorData } from '@/hooks/useCreatorData';
 import {
   View,
   Text,
@@ -19,6 +12,13 @@ import {
   Linking,
   RefreshControl,
 } from 'react-native';
+import { Stack, router } from 'expo-router';
+import { colors } from '@/styles/commonStyles';
+import { supabase } from '@/app/integrations/supabase/client';
+import { useCreatorData } from '@/hooks/useCreatorData';
+import { useVideoProgress } from '@/hooks/useVideoProgress';
+import { IconSymbol } from '@/components/IconSymbol';
+import { formatTo12Hour } from '@/utils/timeFormat';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 
 interface CourseVideo {
@@ -31,12 +31,43 @@ interface CourseVideo {
   duration_seconds: number | null;
 }
 
+interface CourseQuiz {
+  id: string;
+  title: string;
+  description: string | null;
+  passing_score: number;
+  is_required: boolean;
+}
+
+interface AcademyContentItem {
+  id: string;
+  title: string;
+  description: string | null;
+  video_url: string | null;
+  thumbnail_url: string | null;
+  stage_order: number;
+}
+
+interface ContentItem {
+  id: string;
+  content_type: 'video' | 'quiz';
+  order_index: number;
+  video?: CourseVideo;
+  quiz?: CourseQuiz;
+}
+
 interface Course {
   id: string;
   title: string;
   description: string | null;
   cover_image_url: string | null;
-  videos: CourseVideo[];
+  contentItems: ContentItem[];
+}
+
+interface QuizAttempt {
+  quiz_id: string;
+  passed: boolean;
+  score: number;
 }
 
 interface LiveEvent {
@@ -56,19 +87,11 @@ interface LiveEventRegistration {
   creator_handle: string;
 }
 
-const CREATOR_HANDLE = 'camilocossio';
+// Hardcoded creator handle - no authentication needed
+const CREATOR_HANDLE = 'avelezsanti';
 
 export default function AcademyScreen() {
-  const { creator, loading: creatorLoading } = useCreatorData(CREATOR_HANDLE);
-  const { isVideoWatched, getCourseProgress, markVideoAsWatched, refetch: refetchVideoProgress } = useVideoProgress(CREATOR_HANDLE);
-  
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [expandedCourses, setExpandedCourses] = useState<Set<string>>(new Set());
-  const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
-  const [registrations, setRegistrations] = useState<LiveEventRegistration[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
+  const { creator } = useCreatorData(CREATOR_HANDLE);
   const [fontsLoaded] = useFonts({
     Poppins_400Regular,
     Poppins_500Medium,
@@ -76,129 +99,232 @@ export default function AcademyScreen() {
     Poppins_700Bold,
   });
 
-  const fetchAcademyData = useCallback(async () => {
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [academyVideos, setAcademyVideos] = useState<AcademyContentItem[]>([]);
+  const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null);
+  const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
+  const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
+  const [registrations, setRegistrations] = useState<LiveEventRegistration[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [registeringEventId, setRegisteringEventId] = useState<string | null>(null);
+
+  // Get all course videos for progress calculation
+  const allCourseVideos = courses.flatMap(course =>
+    course.contentItems
+      .filter(item => item.content_type === 'video' && item.video)
+      .map(item => ({
+        id: item.video!.id,
+        duration_seconds: item.video!.duration_seconds,
+      }))
+  );
+
+  // Use the video progress hook
+  const { videoProgress, refetch: refetchVideoProgress, isVideoWatched } = useVideoProgress(allCourseVideos);
+
+  useEffect(() => {
+    console.log('[Academy] Component mounted for creator:', CREATOR_HANDLE);
+    fetchAcademyData();
+  }, []);
+
+  const fetchAcademyData = async () => {
     try {
-      console.log('[Academy] 📚 Fetching academy data...');
-      
-      // Fetch courses with videos
-      const { data: coursesData, error: coursesError } = await supabase
-        .from('courses')
-        .select(`
-          id,
-          title,
-          description,
-          cover_image_url,
-          course_videos (
-            id,
-            title,
-            description,
-            video_url,
-            thumbnail_url,
-            order_index,
-            duration_seconds
-          )
-        `)
-        .order('order_index', { ascending: true });
+      console.log('[Academy] Starting data fetch for creator:', CREATOR_HANDLE);
+      setLoading(true);
+      setError(null);
 
-      if (coursesError) throw coursesError;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayString = today.toISOString().split('T')[0];
+      console.log('[Academy] Today\'s date:', todayString);
 
-      const formattedCourses = (coursesData || []).map(course => ({
-        ...course,
-        videos: (course.course_videos || []).sort((a, b) => a.order_index - b.order_index),
-      }));
-
-      console.log('[Academy] ✅ Courses loaded:', formattedCourses.length);
-      setCourses(formattedCourses);
-
-      // Fetch live events
+      // Fetch upcoming live events from live_events table
+      console.log('[Academy] Fetching live events...');
       const { data: eventsData, error: eventsError } = await supabase
         .from('live_events')
         .select('*')
-        .gte('event_date', new Date().toISOString().split('T')[0])
+        .gte('event_date', todayString)
         .order('event_date', { ascending: true })
         .order('event_hour', { ascending: true });
 
-      if (eventsError) throw eventsError;
-      console.log('[Academy] ✅ Live events loaded:', eventsData?.length || 0);
-      setLiveEvents(eventsData || []);
+      if (eventsError) {
+        console.error('[Academy] Error fetching events:', eventsError);
+      } else {
+        console.log('[Academy] Live events found:', eventsData?.length || 0);
+        eventsData?.forEach((event) => {
+          console.log(`[Academy] Event: ${event.event_name} - Date: ${event.event_date} - Hour: ${event.event_hour} - Time Zone: ${event.time_zone}`);
+        });
+        setLiveEvents(eventsData || []);
+      }
 
-      // Fetch registrations
-      const { data: regsData, error: regsError } = await supabase
+      // Fetch registrations for this creator
+      console.log('[Academy] Fetching registrations...');
+      const { data: registrationsData, error: registrationsError } = await supabase
         .from('live_event_registrations')
         .select('*')
         .eq('creator_handle', CREATOR_HANDLE);
 
-      if (regsError) throw regsError;
-      console.log('[Academy] ✅ Registrations loaded:', regsData?.length || 0);
-      setRegistrations(regsData || []);
+      if (registrationsError) {
+        console.error('[Academy] Error fetching registrations:', registrationsError);
+      } else {
+        console.log('[Academy] Registrations found:', registrationsData?.length || 0);
+        setRegistrations(registrationsData || []);
+      }
 
-    } catch (error) {
-      console.error('[Academy] ❌ Error fetching academy data:', error);
-      Alert.alert('Error', 'Failed to load academy data');
+      // Fetch academy content from incubation_content table (Creator Journey videos only)
+      console.log('[Academy] Fetching creator journey videos from incubation_content...');
+      const { data: academyData, error: academyError } = await supabase
+        .from('incubation_content')
+        .select('*')
+        .order('stage_order', { ascending: true });
+
+      if (academyError) {
+        console.error('[Academy] Error fetching creator journey content:', academyError);
+      } else {
+        console.log('[Academy] Creator journey content fetched:', academyData?.length || 0);
+        
+        // Only get videos (quiz is now in the course)
+        const videos: AcademyContentItem[] = [];
+        
+        (academyData || []).forEach((item: any) => {
+          // Add video if it exists
+          if (item.video_url) {
+            videos.push({
+              id: item.id,
+              title: item.title,
+              description: item.description,
+              video_url: item.video_url,
+              thumbnail_url: item.thumbnail_url,
+              stage_order: item.stage_order,
+            });
+          }
+        });
+        
+        console.log('[Academy] Videos found:', videos.length);
+        setAcademyVideos(videos);
+      }
+
+      // Fetch all courses
+      console.log('[Academy] Fetching courses...');
+      const { data: coursesData, error: coursesError } = await supabase
+        .from('courses')
+        .select('*')
+        .eq('status', 'published')
+        .order('created_at', { ascending: true });
+
+      if (coursesError) {
+        console.error('[Academy] Error fetching courses:', coursesError);
+      } else {
+        console.log('[Academy] Courses fetched:', coursesData?.length || 0);
+
+        // Initialize coursesWithContent as empty array
+        const coursesWithContent: Course[] = [];
+        
+        // For each course, fetch its content items
+        for (const course of coursesData || []) {
+          console.log(`[Academy] Course: ${course.title} - Cover Image: ${course.cover_image_url || 'None'}`);
+          
+          const { data: contentData, error: contentError } = await supabase
+            .from('course_content_items')
+            .select(`
+              *,
+              video:course_videos(*),
+              quiz:course_quizzes(*)
+            `)
+            .eq('course_id', course.id)
+            .order('order_index', { ascending: true });
+
+          if (contentError) {
+            console.error('[Academy] Error fetching content for course:', course.id, contentError);
+            continue;
+          }
+
+          // Transform data to include video/quiz in the correct structure
+          const transformedContent = contentData?.map((item: any) => ({
+            id: item.id,
+            content_type: item.content_type,
+            order_index: item.order_index,
+            video: item.content_type === 'video' ? item.video : undefined,
+            quiz: item.content_type === 'quiz' ? item.quiz : undefined,
+          })) || [];
+
+          console.log(`[Academy] Course "${course.title}" has ${transformedContent.length} content items`);
+
+          coursesWithContent.push({
+            id: course.id,
+            title: course.title,
+            description: course.description,
+            cover_image_url: course.cover_image_url,
+            contentItems: transformedContent,
+          });
+        }
+
+        setCourses(coursesWithContent);
+      }
+
+      // Fetch quiz attempts for this creator
+      console.log('[Academy] Fetching quiz attempts...');
+      const { data: quizData, error: quizError } = await supabase
+        .from('user_quiz_attempts')
+        .select('*')
+        .eq('creator_handle', CREATOR_HANDLE)
+        .order('created_at', { ascending: false });
+
+      if (quizError && quizError.code !== 'PGRST116') {
+        console.error('[Academy] Error fetching quiz attempts:', quizError);
+        return;
+      }
+
+      console.log('[Academy] Quiz attempts fetched:', quizData?.length || 0);
+
+      // Get the latest attempt for each quiz
+      const latestAttempts: QuizAttempt[] = [];
+      const seenQuizzes = new Set<string>();
+      
+      quizData?.forEach((attempt: any) => {
+        if (!seenQuizzes.has(attempt.quiz_id)) {
+          latestAttempts.push({
+            quiz_id: attempt.quiz_id,
+            passed: attempt.passed,
+            score: attempt.score,
+          });
+          seenQuizzes.add(attempt.quiz_id);
+        }
+      });
+
+      setQuizAttempts(latestAttempts);
+      
+      // Refetch video progress
+      await refetchVideoProgress();
+      
+      console.log('[Academy] Data fetch completed successfully');
+    } catch (error: any) {
+      console.error('[Academy] Error fetching academy data:', error);
+      setError(`Failed to load academy content: ${error.message}`);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
-
-  useEffect(() => {
-    fetchAcademyData();
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      console.log('[Academy] 🔄 Screen focused - refetching data...');
-      refetchVideoProgress();
-      fetchAcademyData();
-    }, [refetchVideoProgress, fetchAcademyData])
-  );
+  };
 
   const onRefresh = useCallback(() => {
-    console.log('[Academy] 🔄 Pull to refresh triggered');
+    console.log('[Academy] Manual refresh triggered');
     setRefreshing(true);
-    refetchVideoProgress();
     fetchAcademyData();
-  }, [refetchVideoProgress, fetchAcademyData]);
+  }, []);
 
-  const toggleCourse = (courseId: string) => {
-    setExpandedCourses(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(courseId)) {
-        newSet.delete(courseId);
-        console.log('[Academy] 📕 Course collapsed:', courseId);
-      } else {
-        newSet.add(courseId);
-        console.log('[Academy] 📖 Course expanded:', courseId);
-      }
-      return newSet;
-    });
-  };
-
-  const handleVideoPress = async (video: CourseVideo) => {
-    console.log('[Academy] 🎬 Video pressed:', video.title);
-    
-    // Mark as watched immediately on tap
-    await markVideoAsWatched(video.id);
-    
-    // Navigate to video player
-    router.push({
-      pathname: '/video-player',
-      params: {
-        videoId: video.id,
-        videoUrl: video.video_url,
-        title: video.title,
-      },
-    });
-  };
-
-  const isRegistered = (eventId: string) => {
+  const isRegistered = (eventId: string): boolean => {
     return registrations.some(reg => reg.live_event_id === eventId);
   };
 
   const handleRegister = async (eventId: string) => {
+    if (registeringEventId) return;
+
     try {
-      console.log('[Academy] 📝 Registering for event:', eventId);
-      
+      console.log('[Academy] Registering for event:', eventId);
+      setRegisteringEventId(eventId);
+
       const { error } = await supabase
         .from('live_event_registrations')
         .insert({
@@ -206,33 +332,191 @@ export default function AcademyScreen() {
           creator_handle: CREATOR_HANDLE,
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('[Academy] Error registering for event:', error);
+        Alert.alert('Error', 'Failed to register for the event. Please try again.');
+        return;
+      }
 
-      console.log('[Academy] ✅ Successfully registered for event');
-      Alert.alert('Success', 'You have been registered for this event!');
-      fetchAcademyData();
-    } catch (error) {
-      console.error('[Academy] ❌ Error registering for event:', error);
-      Alert.alert('Error', 'Failed to register for event');
+      setRegistrations(prev => [...prev, { live_event_id: eventId, creator_handle: CREATOR_HANDLE }]);
+      console.log('[Academy] Successfully registered for event');
+      Alert.alert('Success', 'You have been registered for this event. You can now join the event!');
+    } catch (error: any) {
+      console.error('[Academy] Exception during registration:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+    } finally {
+      setRegisteringEventId(null);
     }
   };
 
-  const handleJoinEvent = (event: LiveEvent) => {
-    if (event.event_link) {
-      console.log('[Academy] 🔗 Opening event link:', event.event_link);
-      Linking.openURL(event.event_link);
+  const handleJoinEvent = async (event: LiveEvent) => {
+    if (!event.event_link) {
+      Alert.alert('Error', 'Event link not available yet.');
+      return;
+    }
+
+    try {
+      console.log('[Academy] Opening event link:', event.event_link);
+      await Linking.openURL(event.event_link);
+    } catch (error) {
+      console.error('[Academy] Error opening link:', error);
+      Alert.alert('Error', 'Failed to open event link.');
     }
   };
 
   const formatEventDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return date.toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
   };
 
-  if (!fontsLoaded || loading || creatorLoading) {
+  const toggleCourse = (courseId: string) => {
+    setExpandedCourseId(expandedCourseId === courseId ? null : courseId);
+  };
+
+  const isItemCompleted = (item: ContentItem): boolean => {
+    if (item.content_type === 'video' && item.video) {
+      return isVideoWatched(item.video.id);
+    }
+
+    if (item.content_type === 'quiz' && item.quiz) {
+      const attempt = quizAttempts.find((a) => a.quiz_id === item.quiz!.id);
+      return attempt?.passed || false;
+    }
+
+    return false;
+  };
+
+  const handleItemPress = async (course: Course, item: ContentItem, index: number) => {
+    if (item.content_type === 'video' && item.video) {
+      console.log('[Academy] Opening video:', item.video.id);
+      
+      router.push({
+        pathname: '/(tabs)/video-player',
+        params: { 
+          videoId: item.video.id,
+          videoUrl: item.video.video_url,
+          title: item.video.title,
+          description: item.video.description || '',
+        },
+      });
+    } else if (item.content_type === 'quiz' && item.quiz) {
+      console.log('[Academy] Opening quiz:', item.quiz.id, item.quiz.title);
+      
+      // Check if all videos are watched before allowing quiz access
+      const allVideosWatched = course.contentItems
+        .filter(ci => ci.content_type === 'video')
+        .every(ci => isVideoWatched(ci.video!.id));
+
+      if (!allVideosWatched) {
+        Alert.alert(
+          'Quiz Locked',
+          'You must watch all course videos before taking the quiz.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      // Check if quiz is already passed
+      const quizAttempt = quizAttempts.find(a => a.quiz_id === item.quiz!.id);
+      if (quizAttempt?.passed) {
+        Alert.alert(
+          'Quiz Completed',
+          'You have already passed this quiz. Retaking is not allowed.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      
+      try {
+        // Navigate to quiz screen
+        router.push({
+          pathname: '/(tabs)/quiz',
+          params: { 
+            quizId: item.quiz.id,
+            quizTitle: item.quiz.title,
+          },
+        });
+        console.log('[Academy] Quiz navigation initiated');
+      } catch (error) {
+        console.error('[Academy] Error navigating to quiz:', error);
+        Alert.alert('Error', 'Failed to open quiz. Please try again.');
+      }
+    }
+  };
+
+  const getCourseProgress = (course: Course) => {
+    const videoItems = course.contentItems.filter(item => item.content_type === 'video');
+    const watchedVideos = videoItems.filter(item => isVideoWatched(item.video!.id)).length;
+    const totalVideos = videoItems.length;
+    return { completed: watchedVideos, total: totalVideos };
+  };
+
+  const getVideoNumber = (course: Course, item: ContentItem): number => {
+    let videoCount = 0;
+    for (const contentItem of course.contentItems) {
+      if (contentItem.content_type === 'video') {
+        videoCount++;
+        if (contentItem.id === item.id) {
+          return videoCount;
+        }
+      }
+    }
+    return 0;
+  };
+
+  if (loading || !fontsLoaded) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={styles.container}>
+        <Stack.Screen
+          options={{
+            title: 'Academy',
+            headerShown: true,
+            headerStyle: { backgroundColor: colors.background },
+            headerTintColor: colors.text,
+          }}
+        />
+        <View style={styles.centerContent}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading academy...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Show error state if there's an error but no data
+  if (error && courses.length === 0 && liveEvents.length === 0) {
+    return (
+      <View style={styles.container}>
+        <Stack.Screen
+          options={{
+            title: 'Academy',
+            headerShown: true,
+            headerStyle: { backgroundColor: colors.background },
+            headerTintColor: colors.text,
+          }}
+        />
+        <View style={styles.centerContent}>
+          <IconSymbol
+            ios_icon_name="exclamationmark.triangle.fill"
+            android_material_icon_name="error"
+            size={64}
+            color={colors.error}
+          />
+          <Text style={styles.errorTitle}>Unable to Load Content</Text>
+          <Text style={styles.errorText}>
+            We couldn&apos;t load the academy content. Please check your connection and try again.
+          </Text>
+          <TouchableOpacity 
+            style={styles.retryButton} 
+            onPress={fetchAcademyData}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -242,174 +526,441 @@ export default function AcademyScreen() {
       <Stack.Screen
         options={{
           title: 'Academy',
+          headerShown: true,
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,
         }}
       />
-      <ScrollView
-        style={styles.container}
+      <ScrollView 
+        style={styles.container} 
+        contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
         }
       >
-        {/* Courses Section */}
+        {/* Live Events Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📚 Courses</Text>
-          {courses.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>No courses available</Text>
-            </View>
-          ) : (
-            courses.map(course => {
-              const isExpanded = expandedCourses.has(course.id);
-              const progress = getCourseProgress(course.id, course.videos);
+          <Text style={styles.sectionTitle}>Live Events</Text>
+          {liveEvents.length > 0 ? (
+            liveEvents.map((event) => {
+              const registered = isRegistered(event.id);
+              const canJoin = registered;
 
               return (
-                <View key={course.id} style={styles.courseCard}>
-                  {/* Course Header - Collapsible */}
+                <View key={event.id} style={styles.liveEventCard}>
+                  <View style={styles.liveEventHeader}>
+                    <Text style={styles.liveEventName}>{event.event_name}</Text>
+                    <View style={styles.liveBadge}>
+                      <Text style={styles.liveBadgeText}>LIVE</Text>
+                    </View>
+                  </View>
+                  
+                  {event.event_info && (
+                    <Text style={styles.liveEventDescription}>{event.event_info}</Text>
+                  )}
+                  
+                  <View style={styles.liveEventDetails}>
+                    <View style={styles.liveEventDetailItem}>
+                      <IconSymbol
+                        ios_icon_name="calendar"
+                        android_material_icon_name="calendar-today"
+                        size={16}
+                        color={colors.textSecondary}
+                      />
+                      <Text style={styles.liveEventDetailText}>
+                        {formatEventDate(event.event_date)}
+                      </Text>
+                    </View>
+                    <View style={styles.liveEventDetailItem}>
+                      <IconSymbol
+                        ios_icon_name="clock"
+                        android_material_icon_name="access-time"
+                        size={16}
+                        color={colors.textSecondary}
+                      />
+                      <View style={styles.liveEventTimeContainer}>
+                        <Text style={styles.liveEventTimeText}>
+                          {formatTo12Hour(event.event_hour)}
+                        </Text>
+                        {event.time_zone && (
+                          <Text style={styles.liveEventTimezoneText}>
+                            {event.time_zone}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                    {event.language && (
+                      <View style={styles.liveEventDetailItem}>
+                        <IconSymbol
+                          ios_icon_name="globe"
+                          android_material_icon_name="language"
+                          size={16}
+                          color={colors.textSecondary}
+                        />
+                        <Text style={styles.liveEventDetailText}>
+                          {event.language}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={styles.eventButtonsContainer}>
+                    <TouchableOpacity
+                      style={[
+                        styles.registerButton,
+                        registered && styles.registerButtonInactive,
+                      ]}
+                      onPress={() => handleRegister(event.id)}
+                      disabled={registered || registeringEventId === event.id}
+                      activeOpacity={registered ? 1 : 0.7}
+                    >
+                      {registeringEventId === event.id ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text style={styles.registerButtonText}>
+                          {registered ? 'Registered' : 'Register'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.joinEventButton,
+                        !canJoin && styles.joinEventButtonDisabled,
+                      ]}
+                      onPress={() => handleJoinEvent(event)}
+                      disabled={!canJoin}
+                      activeOpacity={canJoin ? 0.7 : 1}
+                    >
+                      <Text style={[
+                        styles.joinEventButtonText,
+                        !canJoin && styles.joinEventButtonTextDisabled,
+                      ]}>
+                        Join Event
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })
+          ) : (
+            <View style={styles.noEventsCard}>
+              <IconSymbol
+                ios_icon_name="calendar.badge.exclamationmark"
+                android_material_icon_name="event-busy"
+                size={48}
+                color={colors.textSecondary}
+              />
+              <Text style={styles.noEventsTitle}>No Upcoming Events</Text>
+              <Text style={styles.noEventsText}>
+                Check back soon for new live events!
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Courses Section (includes Creator Journey) */}
+        {courses.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Courses</Text>
+            {courses.map((course) => {
+              const isExpanded = expandedCourseId === course.id;
+              const progress = getCourseProgress(course);
+              const progressPercentage = progress.total > 0 
+                ? (progress.completed / progress.total) * 100 
+                : 0;
+
+              return (
+                <View key={course.id} style={styles.courseContainer}>
                   <TouchableOpacity
                     style={styles.courseHeader}
                     onPress={() => toggleCourse(course.id)}
                     activeOpacity={0.7}
                   >
-                    {course.cover_image_url && (
-                      <Image source={{ uri: course.cover_image_url }} style={styles.courseCover} />
+                    {course.cover_image_url ? (
+                      <Image
+                        source={{ uri: course.cover_image_url }}
+                        style={styles.courseThumbnail}
+                      />
+                    ) : (
+                      <View style={styles.courseThumbnailPlaceholder}>
+                        <IconSymbol
+                          ios_icon_name="book.fill"
+                          android_material_icon_name="book"
+                          size={32}
+                          color={colors.primary}
+                        />
+                      </View>
                     )}
+                    
                     <View style={styles.courseHeaderText}>
                       <Text style={styles.courseTitle}>{course.title}</Text>
-                      {course.description && (
-                        <Text style={styles.courseDescription} numberOfLines={2}>
-                          {course.description}
-                        </Text>
-                      )}
                       <Text style={styles.courseProgress}>
-                        {progress.watched} / {progress.total} videos completed
+                        {progress.completed} / {progress.total}
                       </Text>
                     </View>
+                    
                     <IconSymbol
-                      ios_icon_name={isExpanded ? 'chevron.up' : 'chevron.down'}
-                      android_material_icon_name={isExpanded ? 'expand-less' : 'expand-more'}
+                      ios_icon_name={isExpanded ? "chevron.up" : "chevron.down"}
+                      android_material_icon_name={isExpanded ? "expand-less" : "expand-more"}
                       size={24}
-                      color={colors.textSecondary}
+                      color={colors.text}
                     />
                   </TouchableOpacity>
 
-                  {/* Course Videos - Expanded */}
-                  {isExpanded && (
-                    <View style={styles.videoList}>
-                      {course.videos.map((video, index) => {
-                        const watched = isVideoWatched(video.id);
+                  <View style={styles.courseProgressBar}>
+                    <View
+                      style={[
+                        styles.courseProgressFill,
+                        { width: `${progressPercentage}%` },
+                      ]}
+                    />
+                  </View>
 
-                        return (
-                          <TouchableOpacity
-                            key={video.id}
-                            style={[
-                              styles.videoItem,
-                              watched && styles.videoItemWatched,
-                            ]}
-                            onPress={() => handleVideoPress(video)}
-                            activeOpacity={0.7}
-                          >
-                            <View style={styles.videoNumber}>
-                              {watched ? (
-                                <IconSymbol 
-                                  ios_icon_name="checkmark.circle.fill" 
-                                  android_material_icon_name="check-circle"
-                                  size={28} 
-                                  color={colors.success} 
-                                />
+                  {course.description && isExpanded && (
+                    <Text style={styles.courseDescription}>{course.description}</Text>
+                  )}
+
+                  {isExpanded && (
+                    <View style={styles.courseContent}>
+                      {course.contentItems.length === 0 ? (
+                        <View style={styles.emptyState}>
+                          <Text style={styles.emptyStateText}>No content available yet</Text>
+                        </View>
+                      ) : (
+                        course.contentItems.map((item, index) => {
+                          const isCompleted = isItemCompleted(item);
+                          const videoNumber = item.content_type === 'video' ? getVideoNumber(course, item) : 0;
+
+                          // Check if quiz is locked
+                          const isQuizLocked = item.content_type === 'quiz' && !course.contentItems
+                            .filter(ci => ci.content_type === 'video')
+                            .every(ci => isVideoWatched(ci.video!.id));
+
+                          // Get quiz attempt for this quiz
+                          const quizAttempt = item.content_type === 'quiz' && item.quiz
+                            ? quizAttempts.find(a => a.quiz_id === item.quiz!.id)
+                            : undefined;
+
+                          return (
+                            <TouchableOpacity
+                              key={item.id}
+                              style={[
+                                styles.contentCard,
+                                isCompleted && styles.contentCardCompleted,
+                                item.content_type === 'quiz' && styles.quizCard,
+                                isQuizLocked && styles.contentCardLocked,
+                              ]}
+                              onPress={() => handleItemPress(course, item, index)}
+                              activeOpacity={0.7}
+                              disabled={isQuizLocked && item.content_type === 'quiz'}
+                            >
+                              {/* Video Thumbnail or Circle indicator */}
+                              {item.content_type === 'video' && item.video ? (
+                                <View style={styles.videoThumbnailContainer}>
+                                  {item.video.thumbnail_url ? (
+                                    <>
+                                      <Image
+                                        source={{ uri: item.video.thumbnail_url }}
+                                        style={styles.videoThumbnail}
+                                        resizeMode="cover"
+                                      />
+                                      {/* Play icon overlay */}
+                                      <View style={styles.playIconOverlay}>
+                                        <View style={styles.playIconCircle}>
+                                          <IconSymbol
+                                            ios_icon_name="play.fill"
+                                            android_material_icon_name="play-arrow"
+                                            size={24}
+                                            color="#FFFFFF"
+                                          />
+                                        </View>
+                                      </View>
+                                      {/* Completion badge */}
+                                      {isCompleted && (
+                                        <View style={styles.completionBadge}>
+                                          <IconSymbol
+                                            ios_icon_name="checkmark.circle.fill"
+                                            android_material_icon_name="check-circle"
+                                            size={24}
+                                            color={colors.primary}
+                                          />
+                                        </View>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <View style={styles.videoThumbnailPlaceholder}>
+                                      <View style={styles.playIconCircle}>
+                                        <IconSymbol
+                                          ios_icon_name="play.fill"
+                                          android_material_icon_name="play-arrow"
+                                          size={24}
+                                          color="#FFFFFF"
+                                        />
+                                      </View>
+                                      {isCompleted && (
+                                        <View style={styles.completionBadge}>
+                                          <IconSymbol
+                                            ios_icon_name="checkmark.circle.fill"
+                                            android_material_icon_name="check-circle"
+                                            size={24}
+                                            color={colors.primary}
+                                          />
+                                        </View>
+                                      )}
+                                    </View>
+                                  )}
+                                  {/* Video number badge */}
+                                  <View style={styles.videoNumberBadge}>
+                                    <Text style={styles.videoNumberText}>{videoNumber}</Text>
+                                  </View>
+                                </View>
                               ) : (
-                                <Text style={styles.videoNumberText}>{index + 1}</Text>
-                              )}
-                            </View>
-                            <View style={styles.videoInfo}>
-                              <Text style={[styles.videoTitle, watched && styles.videoTitleWatched]}>
-                                {video.title}
-                              </Text>
-                              {video.description && (
-                                <Text style={styles.videoDescription} numberOfLines={1}>
-                                  {video.description}
-                                </Text>
-                              )}
-                              {watched && (
-                                <View style={styles.watchedBadge}>
-                                  <Text style={styles.watchedBadgeText}>Watched</Text>
+                                <View style={styles.contentIndicatorContainer}>
+                                  <View style={[
+                                    styles.contentIndicatorCircle,
+                                    isCompleted && styles.contentIndicatorCircleCompleted,
+                                  ]}>
+                                    {isCompleted ? (
+                                      <IconSymbol
+                                        ios_icon_name="checkmark"
+                                        android_material_icon_name="check"
+                                        size={20}
+                                        color="#FFFFFF"
+                                      />
+                                    ) : (
+                                      <Text style={styles.contentIndicatorQuizText}>
+                                        Quiz
+                                      </Text>
+                                    )}
+                                  </View>
                                 </View>
                               )}
-                            </View>
-                            <IconSymbol 
-                              ios_icon_name="play.circle.fill" 
-                              android_material_icon_name="play-circle-filled"
-                              size={32} 
-                              color={watched ? colors.textSecondary : colors.primary} 
-                            />
-                          </TouchableOpacity>
-                        );
-                      })}
+
+                              <View style={styles.contentInfo}>
+                                <View style={styles.contentHeader}>
+                                  <Text style={styles.contentTitle}>
+                                    {item.content_type === 'video'
+                                      ? item.video?.title
+                                      : item.quiz?.title}
+                                  </Text>
+                                  {item.content_type === 'quiz' && item.quiz?.is_required && (
+                                    <View style={styles.requiredBadge}>
+                                      <Text style={styles.requiredBadgeText}>REQUIRED</Text>
+                                    </View>
+                                  )}
+                                  {isQuizLocked && item.content_type === 'quiz' && (
+                                    <IconSymbol
+                                      ios_icon_name="lock.fill"
+                                      android_material_icon_name="lock"
+                                      size={20}
+                                      color="#A0A0A0"
+                                    />
+                                  )}
+                                </View>
+                                
+                                {item.content_type === 'video' && item.video?.description && (
+                                  <Text
+                                    style={styles.contentDescription}
+                                    numberOfLines={2}
+                                  >
+                                    {item.video.description}
+                                  </Text>
+                                )}
+                                
+                                {item.content_type === 'video' && item.video?.duration_seconds && (
+                                  <View style={styles.videoMetaRow}>
+                                    <Text style={styles.videoDuration}>
+                                      {Math.floor(item.video.duration_seconds / 60)} min
+                                    </Text>
+                                    {isCompleted && (
+                                      <View style={styles.watchedBadge}>
+                                        <IconSymbol
+                                          ios_icon_name="checkmark.circle.fill"
+                                          android_material_icon_name="check-circle"
+                                          size={14}
+                                          color={colors.primary}
+                                        />
+                                        <Text style={styles.watchedBadgeText}>Watched</Text>
+                                      </View>
+                                    )}
+                                  </View>
+                                )}
+                                
+                                {item.content_type === 'quiz' && item.quiz?.description && (
+                                  <Text
+                                    style={styles.contentDescription}
+                                    numberOfLines={2}
+                                  >
+                                    {item.quiz.description}
+                                  </Text>
+                                )}
+                                
+                                {item.content_type === 'quiz' && isQuizLocked && (
+                                  <Text style={styles.quizLockedText}>
+                                    Complete all videos to unlock
+                                  </Text>
+                                )}
+                                
+                                {item.content_type === 'quiz' && !isQuizLocked && !quizAttempt && (
+                                  <Text style={styles.videoDuration}>
+                                    {item.quiz?.required_correct_answers || 0} correct answers required
+                                  </Text>
+                                )}
+                                
+                                {item.content_type === 'quiz' && quizAttempt && (
+                                  <View style={styles.quizResultContainer}>
+                                    <Text style={[
+                                      styles.quizResultText,
+                                      quizAttempt.passed ? styles.quizResultPassed : styles.quizResultFailed
+                                    ]}>
+                                      {quizAttempt.passed ? '✓ PASSED' : '✗ FAILED'} - {quizAttempt.score}%
+                                    </Text>
+                                    {!quizAttempt.passed && (
+                                      <Text style={styles.quizRetryText}>Tap to retry</Text>
+                                    )}
+                                    {quizAttempt.passed && (
+                                      <Text style={styles.quizLockedText}>Retake not allowed</Text>
+                                    )}
+                                  </View>
+                                )}
+                              </View>
+
+                              <View style={styles.contentArrow}>
+                                <IconSymbol
+                                  ios_icon_name="chevron.right"
+                                  android_material_icon_name="chevron-right"
+                                  size={20}
+                                  color="#A0A0A0"
+                                />
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })
+                      )}
                     </View>
                   )}
                 </View>
               );
-            })
-          )}
-        </View>
+            })}
+          </View>
+        )}
 
-        {/* Live Events Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🎥 Upcoming Live Events</Text>
-          {liveEvents.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>No upcoming events</Text>
-            </View>
-          ) : (
-            liveEvents.map(event => (
-              <View key={event.id} style={styles.eventCard}>
-                <View style={styles.eventHeader}>
-                  <Text style={styles.eventName}>{event.event_name}</Text>
-                  <View style={styles.eventBadge}>
-                    <Text style={styles.eventBadgeText}>{event.language}</Text>
-                  </View>
-                </View>
-                <Text style={styles.eventInfo}>{event.event_info}</Text>
-                <View style={styles.eventDetails}>
-                  <Text style={styles.eventDate}>
-                    📅 {formatEventDate(event.event_date)} at {formatTo12Hour(event.event_hour)}
-                  </Text>
-                  {event.region && (
-                    <Text style={styles.eventRegion}>🌍 {event.region}</Text>
-                  )}
-                </View>
-                <View style={styles.eventActions}>
-                  {isRegistered(event.id) ? (
-                    <>
-                      <View style={styles.registeredBadge}>
-                        <IconSymbol 
-                          ios_icon_name="checkmark.circle.fill" 
-                          android_material_icon_name="check-circle"
-                          size={18} 
-                          color={colors.success} 
-                        />
-                        <Text style={styles.registeredText}>Registered</Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.joinButton}
-                        onPress={() => handleJoinEvent(event)}
-                      >
-                        <Text style={styles.joinButtonText}>Join Event</Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    <TouchableOpacity
-                      style={styles.registerButton}
-                      onPress={() => handleRegister(event.id)}
-                    >
-                      <Text style={styles.registerButtonText}>Register</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-            ))
-          )}
+        <View style={styles.infoCard}>
+          <IconSymbol
+            ios_icon_name="info.circle.fill"
+            android_material_icon_name="info"
+            size={24}
+            color={colors.primary}
+          />
+          <Text style={styles.infoText}>
+            Complete all videos and pass the final quiz (70% required) in the Creator Journey course to become a certified JAXE creator. The quiz can be retaken as many times as needed.
+          </Text>
         </View>
       </ScrollView>
     </>
@@ -421,221 +972,474 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  loadingContainer: {
+  centerContent: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    padding: 20,
+  },
+  content: {
+    padding: 20,
+    paddingBottom: 120,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    fontFamily: 'Poppins_500Medium',
+    color: colors.textSecondary,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.text,
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorText: {
+    fontSize: 16,
+    fontFamily: 'Poppins_500Medium',
+    color: colors.error,
+    textAlign: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 20,
+  },
+  retryButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 16,
+    padding: 16,
+    paddingHorizontal: 32,
+  },
+  retryButtonText: {
+    fontSize: 16,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
+  },
+  emptyState: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontFamily: 'Poppins_500Medium',
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   section: {
-    padding: 16,
+    marginBottom: 32,
   },
   sectionTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontFamily: 'Poppins_700Bold',
     color: colors.text,
     marginBottom: 16,
   },
-  courseCard: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
+  liveEventCard: {
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 24,
+    padding: 24,
     marginBottom: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    borderWidth: 3,
+    borderColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  noEventsCard: {
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 24,
+    padding: 32,
+    alignItems: 'center',
+  },
+  noEventsTitle: {
+    fontSize: 20,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.text,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  noEventsText: {
+    fontSize: 15,
+    fontFamily: 'Poppins_400Regular',
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  liveEventHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  liveEventName: {
+    fontSize: 24,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.text,
+    flex: 1,
+    marginRight: 12,
+  },
+  liveBadge: {
+    backgroundColor: colors.error,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  liveBadgeText: {
+    fontSize: 11,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  liveEventDescription: {
+    fontSize: 15,
+    fontFamily: 'Poppins_400Regular',
+    color: colors.textSecondary,
+    marginBottom: 16,
+    lineHeight: 22,
+  },
+  liveEventDetails: {
+    gap: 12,
+    marginBottom: 20,
+  },
+  liveEventDetailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  liveEventDetailText: {
+    fontSize: 15,
+    fontFamily: 'Poppins_500Medium',
+    color: colors.text,
+  },
+  liveEventTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  liveEventTimeText: {
+    fontSize: 15,
+    fontFamily: 'Poppins_500Medium',
+    color: colors.text,
+  },
+  liveEventTimezoneText: {
+    fontSize: 15,
+    fontFamily: 'Poppins_500Medium',
+    color: '#999999',
+  },
+  eventButtonsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  registerButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
+  },
+  registerButtonInactive: {
+    backgroundColor: colors.grey,
+    opacity: 0.6,
+  },
+  registerButtonText: {
+    fontSize: 16,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
+  },
+  joinEventButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
+  },
+  joinEventButtonDisabled: {
+    backgroundColor: colors.grey,
+    opacity: 0.4,
+  },
+  joinEventButtonText: {
+    fontSize: 16,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
+  },
+  joinEventButtonTextDisabled: {
+    color: '#999999',
+  },
+  courseContainer: {
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
   },
   courseHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    marginBottom: 12,
+    gap: 12,
   },
-  courseCover: {
+  courseThumbnail: {
     width: 60,
     height: 60,
     borderRadius: 12,
-    marginRight: 12,
-    backgroundColor: colors.backgroundSecondary,
+  },
+  courseThumbnailPlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    backgroundColor: colors.grey,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   courseHeaderText: {
     flex: 1,
   },
   courseTitle: {
-    fontSize: 18,
-    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 20,
+    fontFamily: 'Poppins_700Bold',
     color: colors.text,
     marginBottom: 4,
   },
+  courseProgress: {
+    fontSize: 14,
+    fontFamily: 'Poppins_500Medium',
+    color: colors.textSecondary,
+  },
+  courseProgressBar: {
+    height: 8,
+    backgroundColor: colors.grey,
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  courseProgressFill: {
+    height: '100%',
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+  },
   courseDescription: {
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: 'Poppins_400Regular',
     color: colors.textSecondary,
-    marginBottom: 6,
+    lineHeight: 20,
+    marginBottom: 16,
   },
-  courseProgress: {
-    fontSize: 13,
+  courseContent: {
+    gap: 12,
+  },
+  contentCard: {
+    flexDirection: 'row',
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    gap: 16,
+  },
+  contentCardCompleted: {
+    backgroundColor: 'rgba(102, 66, 239, 0.1)',
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  quizCard: {
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderStyle: 'dashed',
+  },
+  contentCardLocked: {
+    opacity: 0.6,
+    backgroundColor: colors.grey,
+  },
+  quizLockedText: {
+    fontSize: 12,
+    fontFamily: 'Poppins_500Medium',
+    color: '#A0A0A0',
+    marginTop: 4,
+  },
+  quizResultContainer: {
+    marginTop: 8,
+  },
+  quizResultText: {
+    fontSize: 14,
+    fontFamily: 'Poppins_700Bold',
+    marginBottom: 4,
+  },
+  quizResultPassed: {
+    color: '#10B981',
+  },
+  quizResultFailed: {
+    color: '#EF4444',
+  },
+  quizRetryText: {
+    fontSize: 12,
     fontFamily: 'Poppins_500Medium',
     color: colors.primary,
   },
-  videoList: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+  videoThumbnailContainer: {
+    width: 120,
+    height: 80,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
   },
-  videoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+  videoThumbnail: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 12,
   },
-  videoItemWatched: {
-    opacity: 0.7,
-    backgroundColor: colors.backgroundSecondary,
-  },
-  videoNumber: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.backgroundSecondary,
+  videoThumbnailPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.grey,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    borderRadius: 12,
   },
-  videoNumberText: {
-    fontSize: 14,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.text,
-  },
-  videoInfo: {
-    flex: 1,
-  },
-  videoTitle: {
-    fontSize: 15,
-    fontFamily: 'Poppins_500Medium',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  videoTitleWatched: {
-    color: colors.textSecondary,
-  },
-  videoDescription: {
-    fontSize: 12,
-    fontFamily: 'Poppins_400Regular',
-    color: colors.textSecondary,
-  },
-  watchedBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.success + '20',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-    marginTop: 4,
-  },
-  watchedBadgeText: {
-    fontSize: 11,
-    fontFamily: 'Poppins_500Medium',
-    color: colors.success,
-  },
-  eventCard: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  eventHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  playIconOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
-  eventName: {
-    fontSize: 18,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.text,
-    flex: 1,
+  playIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(102, 66, 239, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  eventBadge: {
-    backgroundColor: colors.primary + '20',
-    paddingHorizontal: 10,
+  completionBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: colors.background,
+    borderRadius: 12,
+  },
+  videoNumberBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
   },
-  eventBadgeText: {
+  videoNumberText: {
+    fontSize: 12,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
+  },
+  contentIndicatorContainer: {
+    width: 56,
+    height: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  contentIndicatorCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.grey,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  contentIndicatorCircleCompleted: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  contentIndicatorQuizText: {
+    fontSize: 12,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  contentInfo: {
+    flex: 1,
+  },
+  contentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  contentTitle: {
+    fontSize: 15,
+    fontFamily: 'Poppins_600SemiBold',
+    color: colors.text,
+    flex: 1,
+  },
+  requiredBadge: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  requiredBadgeText: {
+    fontSize: 9,
+    fontFamily: 'Poppins_700Bold',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  contentDescription: {
+    fontSize: 13,
+    fontFamily: 'Poppins_400Regular',
+    color: colors.textSecondary,
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  videoMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  videoDuration: {
     fontSize: 12,
     fontFamily: 'Poppins_500Medium',
     color: colors.primary,
   },
-  eventInfo: {
-    fontSize: 14,
-    fontFamily: 'Poppins_400Regular',
-    color: colors.textSecondary,
-    marginBottom: 12,
-  },
-  eventDetails: {
-    marginBottom: 12,
-  },
-  eventDate: {
-    fontSize: 13,
-    fontFamily: 'Poppins_500Medium',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  eventRegion: {
-    fontSize: 13,
-    fontFamily: 'Poppins_400Regular',
-    color: colors.textSecondary,
-  },
-  eventActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  registeredBadge: {
+  watchedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
+    backgroundColor: 'rgba(102, 66, 239, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  registeredText: {
-    fontSize: 14,
-    fontFamily: 'Poppins_500Medium',
-    color: colors.success,
-  },
-  registerButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  registerButtonText: {
-    fontSize: 14,
+  watchedBadgeText: {
+    fontSize: 11,
     fontFamily: 'Poppins_600SemiBold',
-    color: '#FFFFFF',
+    color: colors.primary,
   },
-  joinButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  joinButtonText: {
-    fontSize: 14,
-    fontFamily: 'Poppins_600SemiBold',
-    color: '#FFFFFF',
-  },
-  emptyState: {
-    padding: 32,
+  contentArrow: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  emptyStateText: {
+  infoCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 16,
+    padding: 16,
+  },
+  infoText: {
+    flex: 1,
     fontSize: 14,
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Poppins_500Medium',
     color: colors.textSecondary,
+    lineHeight: 20,
   },
 });

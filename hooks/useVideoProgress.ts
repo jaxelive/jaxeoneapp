@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/app/integrations/supabase/client';
 
 interface VideoProgress {
@@ -30,16 +30,10 @@ export function useVideoProgress(courseVideos?: { id: string; duration_seconds: 
   const [videoProgress, setVideoProgress] = useState<VideoProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const courseVideosRef = useRef(courseVideos);
-
-  // Update ref when courseVideos changes
-  useEffect(() => {
-    courseVideosRef.current = courseVideos;
-  }, [courseVideos]);
 
   const fetchVideoProgress = useCallback(async () => {
     try {
-      console.log('[useVideoProgress] 🔄 Fetching video progress for creator:', CREATOR_HANDLE);
+      console.log('[useVideoProgress] Fetching video progress for creator:', CREATOR_HANDLE);
       setLoading(true);
       setError(null);
 
@@ -49,22 +43,20 @@ export function useVideoProgress(courseVideos?: { id: string; duration_seconds: 
         .eq('creator_handle', CREATOR_HANDLE);
 
       if (progressError) {
-        console.error('[useVideoProgress] ❌ Error fetching video progress:', progressError);
+        console.error('[useVideoProgress] Error fetching video progress:', progressError);
         setError(progressError.message);
-        setLoading(false);
         return;
       }
 
-      console.log('[useVideoProgress] ✅ Video progress fetched:', progressData?.length || 0, 'records');
-      console.log('[useVideoProgress] 📊 Progress data:', JSON.stringify(progressData, null, 2));
+      console.log('[useVideoProgress] Video progress fetched:', progressData?.length || 0);
 
       // Calculate progress percentage for each video
       const progressWithPercentage = progressData?.map((p: any) => {
         let duration = 0;
 
         // Find duration from courseVideos if provided
-        if (courseVideosRef.current) {
-          const video = courseVideosRef.current.find(v => v.id === p.video_id);
+        if (courseVideos) {
+          const video = courseVideos.find(v => v.id === p.video_id);
           if (video?.duration_seconds) {
             duration = video.duration_seconds;
           }
@@ -74,58 +66,45 @@ export function useVideoProgress(courseVideos?: { id: string; duration_seconds: 
           ? Math.min(100, Math.round((p.watched_seconds / duration) * 100))
           : 0;
 
-        const result = {
+        return {
           video_id: p.video_id,
           completed: p.completed || false,
           watched_seconds: p.watched_seconds || 0,
           progress_percentage: percentage,
         };
-
-        console.log(`[useVideoProgress] 📹 Video ${p.video_id.substring(0, 8)}... - Completed: ${result.completed}, Watched: ${result.watched_seconds}s`);
-
-        return result;
       }) || [];
 
       setVideoProgress(progressWithPercentage);
-      setLoading(false);
     } catch (err: any) {
-      console.error('[useVideoProgress] ❌ Exception fetching video progress:', err);
+      console.error('[useVideoProgress] Exception fetching video progress:', err);
       setError(err.message);
+    } finally {
       setLoading(false);
     }
-  }, []); // Remove courseVideos from dependencies to prevent infinite loop
+  }, [courseVideos]);
 
   useEffect(() => {
     fetchVideoProgress();
   }, [fetchVideoProgress]);
 
   const getVideoProgress = useCallback((videoId: string): VideoProgress | undefined => {
-    const progress = videoProgress.find(p => p.video_id === videoId);
-    console.log(`[useVideoProgress] 🔍 Getting progress for video ${videoId.substring(0, 8)}...`, progress ? `Completed: ${progress.completed}` : 'Not found');
-    return progress;
+    return videoProgress.find(p => p.video_id === videoId);
   }, [videoProgress]);
 
   const isVideoWatched = useCallback((videoId: string): boolean => {
     const progress = videoProgress.find(p => p.video_id === videoId);
-    const watched = progress?.completed || false;
-    console.log(`[useVideoProgress] ✓ Is video ${videoId.substring(0, 8)}... watched?`, watched);
-    return watched;
+    return progress?.completed || false;
   }, [videoProgress]);
 
   const getCourseProgress = useCallback((courseId: string, courseVideos: { id: string }[]): CourseProgress => {
     const totalVideos = courseVideos.length;
-    const watchedVideos = courseVideos.filter(video => {
-      const progress = videoProgress.find(p => p.video_id === video.id);
-      return progress?.completed || false;
-    }).length;
-    
-    console.log(`[useVideoProgress] 📚 Course ${courseId.substring(0, 8)}... progress: ${watchedVideos}/${totalVideos}`);
+    const watchedVideos = courseVideos.filter(video => isVideoWatched(video.id)).length;
     
     return {
       completed: watchedVideos,
       total: totalVideos,
     };
-  }, [videoProgress]);
+  }, [isVideoWatched]);
 
   return {
     videoProgress,
