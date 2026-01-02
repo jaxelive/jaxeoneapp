@@ -9,6 +9,11 @@ interface VideoProgress {
   progress_percentage: number;
 }
 
+interface CourseProgress {
+  completed: number;
+  total: number;
+}
+
 interface UseVideoProgressReturn {
   videoProgress: VideoProgress[];
   loading: boolean;
@@ -16,6 +21,7 @@ interface UseVideoProgressReturn {
   refetch: () => Promise<void>;
   getVideoProgress: (videoId: string) => VideoProgress | undefined;
   isVideoWatched: (videoId: string) => boolean;
+  getCourseProgress: (courseId: string, courseVideos: { id: string }[]) => CourseProgress;
 }
 
 const CREATOR_HANDLE = 'avelezsanti';
@@ -90,6 +96,16 @@ export function useVideoProgress(courseVideos?: { id: string; duration_seconds: 
     return progress?.completed || false;
   }, [videoProgress]);
 
+  const getCourseProgress = useCallback((courseId: string, courseVideos: { id: string }[]): CourseProgress => {
+    const totalVideos = courseVideos.length;
+    const watchedVideos = courseVideos.filter(video => isVideoWatched(video.id)).length;
+    
+    return {
+      completed: watchedVideos,
+      total: totalVideos,
+    };
+  }, [isVideoWatched]);
+
   return {
     videoProgress,
     loading,
@@ -97,5 +113,6 @@ export function useVideoProgress(courseVideos?: { id: string; duration_seconds: 
     refetch: fetchVideoProgress,
     getVideoProgress,
     isVideoWatched,
+    getCourseProgress,
   };
 }

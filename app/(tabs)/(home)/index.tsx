@@ -126,19 +126,23 @@ export default function HomeScreen() {
   const [showChallenge, setShowChallenge] = useState(true);
   const [academyCompletedAt, setAcademyCompletedAt] = useState<string | null>(null);
   const [challengeCompletedAt, setChallengeCompletedAt] = useState<string | null>(null);
-  const [totalCourseVideos, setTotalCourseVideos] = useState(0);
   const [featuredLiveEvent, setFeaturedLiveEvent] = useState<LiveEvent | null>(null);
   const [isRegisteredForEvent, setIsRegisteredForEvent] = useState(false);
   const [registeringEventId, setRegisteringEventId] = useState<string | null>(null);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
   const [mostRecentCourse, setMostRecentCourse] = useState<MostRecentCourse | null>(null);
+  const [courseVideos, setCourseVideos] = useState<{ id: string; duration_seconds: number | null }[]>([]);
   const hasInitializedRef = useRef(false);
 
-  // Use video progress hook
-  const { videoProgress, refetch: refetchVideoProgress } = useVideoProgress();
+  // Use video progress hook with course videos
+  const { videoProgress, refetch: refetchVideoProgress, getCourseProgress } = useVideoProgress(courseVideos);
 
-  // Calculate education progress from video progress
-  const educationProgress = videoProgress.filter(p => p.completed).length;
+  // Calculate education progress from the most recent course
+  const educationProgress = mostRecentCourse 
+    ? getCourseProgress(mostRecentCourse.id, courseVideos).completed
+    : 0;
+  
+  const totalCourseVideos = mostRecentCourse?.total_videos || 0;
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -230,7 +234,7 @@ export default function HomeScreen() {
       const { data: progressData, error: progressError } = await supabase
         .from('user_day_progress')
         .select('*')
-        .eq('user_id', creator.id);
+        .eq('creator_handle', CREATOR_HANDLE);
 
       if (progressError && progressError.code !== 'PGRST116') {
         console.error('[HomeScreen] Error fetching challenge progress:', progressError);
@@ -238,7 +242,7 @@ export default function HomeScreen() {
       }
 
       const completedDays = progressData?.filter(p => p.status === 'completed').length || 0;
-      const currentDay = progressData?.find(p => p.status === 'unlocked')?.day_number || 1;
+      const currentDay = progressData?.find(p => p.status === 'active')?.day_number || 1;
       const todayStatus = progressData?.find(p => p.day_number === currentDay)?.status || 'locked';
 
       console.log('[HomeScreen] Challenge progress:', {
@@ -258,7 +262,7 @@ export default function HomeScreen() {
       const { data: challengeData, error: challengeError } = await supabase
         .from('user_challenge_progress')
         .select('completed_at')
-        .eq('user_id', creator.id)
+        .eq('creator_handle', CREATOR_HANDLE)
         .eq('status', 'completed')
         .single();
 
@@ -289,7 +293,7 @@ export default function HomeScreen() {
     if (!creator) return;
 
     try {
-      // Get the most recent published course with video count
+      // Get the most recent published course
       const { data: courseData, error: courseError } = await supabase
         .from('courses')
         .select(`
@@ -308,19 +312,20 @@ export default function HomeScreen() {
       }
 
       if (courseData) {
-        // Get video count for this course
+        // Get videos for this course
         const { data: videosData, error: videosError } = await supabase
           .from('course_videos')
-          .select('id')
+          .select('id, duration_seconds')
           .eq('course_id', courseData.id);
 
         if (videosError && videosError.code !== 'PGRST116') {
           console.error('[HomeScreen] Error fetching course videos:', videosError);
         }
 
-        const totalVideos = videosData?.length || 0;
-        setTotalCourseVideos(totalVideos);
+        const videos = videosData || [];
+        const totalVideos = videos.length;
         
+        setCourseVideos(videos);
         setMostRecentCourse({
           id: courseData.id,
           title: courseData.title,
@@ -339,7 +344,7 @@ export default function HomeScreen() {
       const { data: courseProgressData, error: courseProgressError } = await supabase
         .from('user_course_progress')
         .select('completed_at')
-        .eq('user_id', creator.id)
+        .eq('creator_handle', CREATOR_HANDLE)
         .eq('completed', true)
         .single();
 
@@ -526,9 +531,10 @@ export default function HomeScreen() {
         fetchTopCreators(),
         fetchFeaturedLiveEvent(),
         checkUnreadNotifications(),
-        refetchVideoProgress(),
       ]).then(() => {
         console.log('[HomeScreen] All data initialized successfully');
+        // Refetch video progress after course data is loaded
+        refetchVideoProgress();
       }).catch((err) => {
         console.error('[HomeScreen] Error during initialization:', err);
       });
