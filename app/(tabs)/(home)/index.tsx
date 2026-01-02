@@ -1,6 +1,6 @@
 
 import React, { useRef, useEffect, useState, useCallback } from "react";
-import { Stack, router } from "expo-router";
+import { Stack, router, useFocusEffect } from "expo-router";
 import { 
   ScrollView, 
   StyleSheet, 
@@ -136,6 +136,14 @@ export default function HomeScreen() {
 
   // Use video progress hook with course videos
   const { videoProgress, refetch: refetchVideoProgress, getCourseProgress } = useVideoProgress(courseVideos);
+
+  // Refetch video progress when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      console.log('[HomeScreen] 🎯 Screen focused - Refetching video progress');
+      refetchVideoProgress();
+    }, [refetchVideoProgress])
+  );
 
   // Calculate education progress from the most recent course
   const educationProgress = mostRecentCourse 

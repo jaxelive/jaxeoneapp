@@ -12,7 +12,7 @@ import {
   Linking,
   RefreshControl,
 } from 'react-native';
-import { Stack, router } from 'expo-router';
+import { Stack, router, useFocusEffect } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/app/integrations/supabase/client';
 import { useCreatorData } from '@/hooks/useCreatorData';
@@ -122,6 +122,14 @@ export default function AcademyScreen() {
 
   // Use the video progress hook
   const { videoProgress, refetch: refetchVideoProgress, isVideoWatched } = useVideoProgress(allCourseVideos);
+
+  // Refetch video progress when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      console.log('[Academy] 🎯 Screen focused - Refetching video progress');
+      refetchVideoProgress();
+    }, [refetchVideoProgress])
+  );
 
   useEffect(() => {
     console.log('[Academy] Component mounted for creator:', CREATOR_HANDLE);
@@ -379,7 +387,9 @@ export default function AcademyScreen() {
 
   const isItemCompleted = (item: ContentItem): boolean => {
     if (item.content_type === 'video' && item.video) {
-      return isVideoWatched(item.video.id);
+      const watched = isVideoWatched(item.video.id);
+      console.log(`[Academy] 🎬 Checking if video ${item.video.id.substring(0, 8)}... is watched:`, watched);
+      return watched;
     }
 
     if (item.content_type === 'quiz' && item.quiz) {
@@ -450,8 +460,13 @@ export default function AcademyScreen() {
 
   const getCourseProgress = (course: Course) => {
     const videoItems = course.contentItems.filter(item => item.content_type === 'video');
-    const watchedVideos = videoItems.filter(item => isVideoWatched(item.video!.id)).length;
+    const watchedVideos = videoItems.filter(item => {
+      const watched = isVideoWatched(item.video!.id);
+      console.log(`[Academy] 📊 Video ${item.video!.id.substring(0, 8)}... watched:`, watched);
+      return watched;
+    }).length;
     const totalVideos = videoItems.length;
+    console.log(`[Academy] 📚 Course "${course.title}" progress: ${watchedVideos}/${totalVideos}`);
     return { completed: watchedVideos, total: totalVideos };
   };
 
