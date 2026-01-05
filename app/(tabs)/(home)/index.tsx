@@ -134,12 +134,12 @@ export default function HomeScreen() {
   const [courseVideos, setCourseVideos] = useState<{ id: string; duration_seconds: number | null }[]>([]);
   const hasInitializedRef = useRef(false);
 
-  // Use video progress hook with course videos
-  const { videoProgress, refetch: refetchVideoProgress, getCourseProgress } = useVideoProgress(courseVideos);
+  // Use video progress hook with CREATOR_HANDLE (not courseVideos)
+  const { videoProgress, refetch: refetchVideoProgress, getCourseProgress } = useVideoProgress(CREATOR_HANDLE);
 
   // Calculate education progress from the most recent course
-  const educationProgress = mostRecentCourse 
-    ? getCourseProgress(mostRecentCourse.id, courseVideos).completed
+  const educationProgress = mostRecentCourse && courseVideos.length > 0
+    ? getCourseProgress(mostRecentCourse.id, courseVideos).watched
     : 0;
   
   const totalCourseVideos = mostRecentCourse?.total_videos || 0;
