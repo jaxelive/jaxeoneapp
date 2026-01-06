@@ -65,8 +65,12 @@ export const useVideoProgress = (creatorHandle: string) => {
 
   const getCourseProgress = useCallback((courseId: string, videos: any[]): { watched: number; total: number } => {
     const total = videos.length;
-    const watched = videos.filter(video => isVideoWatched(video.id)).length;
-    console.log('[useVideoProgress] Course progress:', { watched, total, courseId });
+    const watched = videos.filter(video => {
+      const isWatched = isVideoWatched(video.id);
+      console.log('[useVideoProgress] Video', video.id, 'watched:', isWatched);
+      return isWatched;
+    }).length;
+    console.log('[useVideoProgress] Course progress:', { watched, total, courseId, videoIds: videos.map(v => v.id) });
     return { watched, total };
   }, [isVideoWatched]);
 
@@ -121,9 +125,11 @@ export const useVideoProgress = (creatorHandle: string) => {
     }
   }, [creatorHandle]);
 
-  const refetch = useCallback(() => {
+  const refetch = useCallback(async () => {
     console.log('[useVideoProgress] Manual refetch triggered');
-    return fetchVideoProgress();
+    setLoading(true);
+    await fetchVideoProgress();
+    console.log('[useVideoProgress] Manual refetch completed');
   }, [fetchVideoProgress]);
 
   return {

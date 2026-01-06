@@ -12,7 +12,7 @@ import {
   Linking,
   RefreshControl,
 } from 'react-native';
-import { Stack, router } from 'expo-router';
+import { Stack, router, useFocusEffect } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/app/integrations/supabase/client';
 import { useCreatorData } from '@/hooks/useCreatorData';
@@ -117,6 +117,14 @@ export default function AcademyScreen() {
     console.log('[Academy] Component mounted for creator:', CREATOR_HANDLE);
     fetchAcademyData();
   }, []);
+
+  // Refetch video progress when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      console.log('[Academy] Screen focused - refetching video progress');
+      refetchVideoProgress();
+    }, [refetchVideoProgress])
+  );
 
   const fetchAcademyData = async () => {
     try {
@@ -381,6 +389,7 @@ export default function AcademyScreen() {
     if (item.content_type === 'video' && item.video) {
       console.log('[Academy] Opening video:', item.video.id);
       
+      // Navigate to video player
       router.push({
         pathname: '/(tabs)/video-player',
         params: { 
@@ -390,6 +399,13 @@ export default function AcademyScreen() {
           description: item.video.description || '',
         },
       });
+      
+      // Refetch progress after a short delay to allow the video player to mark it as watched
+      setTimeout(async () => {
+        console.log('[Academy] Refetching video progress after navigation...');
+        await refetchVideoProgress();
+        console.log('[Academy] Video progress refetched');
+      }, 1000);
     } else if (item.content_type === 'quiz' && item.quiz) {
       console.log('[Academy] Opening quiz:', item.quiz.id, item.quiz.title);
       
@@ -426,8 +442,13 @@ export default function AcademyScreen() {
 
   const getCourseProgress = (course: Course) => {
     const videoItems = course.contentItems.filter(item => item.content_type === 'video');
-    const watchedVideos = videoItems.filter(item => isVideoWatched(item.video!.id)).length;
+    const watchedVideos = videoItems.filter(item => {
+      const watched = isVideoWatched(item.video!.id);
+      console.log('[Academy] getCourseProgress - Video', item.video!.id, 'watched:', watched);
+      return watched;
+    }).length;
     const totalVideos = videoItems.length;
+    console.log('[Academy] getCourseProgress - Course:', course.title, 'Progress:', watchedVideos, '/', totalVideos);
     return { completed: watchedVideos, total: totalVideos };
   };
 
@@ -652,7 +673,7 @@ export default function AcademyScreen() {
                 : 0;
 
               return (
-                <View key={course.id} style={styles.courseContainer}>
+                <View key={`${course.id}-${progress.completed}`} style={styles.courseContainer}>
                   <TouchableOpacity
                     style={styles.courseHeader}
                     onPress={() => toggleCourse(course.id)}
@@ -725,7 +746,7 @@ export default function AcademyScreen() {
 
                           return (
                             <TouchableOpacity
-                              key={item.id}
+                              key={`${item.id}-${isCompleted ? 'completed' : 'incomplete'}`}
                               style={[
                                 styles.contentCard,
                                 isCompleted && styles.contentCardCompleted,

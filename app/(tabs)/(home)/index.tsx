@@ -1,6 +1,6 @@
 
 import React, { useRef, useEffect, useState, useCallback } from "react";
-import { Stack, router } from "expo-router";
+import { Stack, router, useFocusEffect } from "expo-router";
 import { 
   ScrollView, 
   StyleSheet, 
@@ -138,9 +138,15 @@ export default function HomeScreen() {
   const { videoProgress, loading: videoProgressLoading, refetch: refetchVideoProgress, getCourseProgress } = useVideoProgress(CREATOR_HANDLE);
 
   // Calculate education progress from the most recent course
-  const educationProgress = mostRecentCourse && courseVideos.length > 0
-    ? getCourseProgress(mostRecentCourse.id, courseVideos).watched
-    : 0;
+  const educationProgress = React.useMemo(() => {
+    if (!mostRecentCourse || courseVideos.length === 0) {
+      console.log('[HomeScreen] 📚 No course or videos available');
+      return 0;
+    }
+    const progress = getCourseProgress(mostRecentCourse.id, courseVideos).watched;
+    console.log('[HomeScreen] 📚 Education progress calculated:', progress, '/', courseVideos.length);
+    return progress;
+  }, [mostRecentCourse, courseVideos, getCourseProgress, videoProgress]);
   
   const totalCourseVideos = mostRecentCourse?.total_videos || 0;
 
@@ -557,6 +563,16 @@ export default function HomeScreen() {
       videoProgressLoading,
     });
   }, [videoProgress, educationProgress, totalCourseVideos, courseVideos, videoProgressLoading]);
+
+  // Refetch video progress when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      console.log('[HomeScreen] Screen focused - refetching video progress');
+      if (courseVideos.length > 0) {
+        refetchVideoProgress();
+      }
+    }, [refetchVideoProgress, courseVideos.length])
+  );
 
   const handleRegisterForEvent = async (eventId: string) => {
     if (registeringEventId) return;

@@ -72,8 +72,10 @@ export default function VideoPlayerScreen() {
         console.log('[VideoPlayer] Marking video as watched on open');
         hasMarkedWatchedRef.current = true;
         await markVideoAsWatched(videoId);
+        console.log('[VideoPlayer] Video marked as watched, refetching progress...');
         // Refetch progress to update the UI
         await refetch();
+        console.log('[VideoPlayer] Progress refetch completed');
       }
     } catch (error: any) {
       console.error('[VideoPlayer] Error in fetchVideoData:', error);
@@ -158,7 +160,11 @@ export default function VideoPlayerScreen() {
           <View style={styles.buttonContainer}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.back()}
+              onPress={async () => {
+                console.log('[VideoPlayer] Back button pressed - triggering final refetch');
+                await refetch();
+                router.back();
+              }}
               activeOpacity={0.7}
             >
               <Text style={styles.backButtonText}>
