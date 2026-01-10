@@ -1,12 +1,9 @@
 
-import { supabase } from '@/app/integrations/supabase/client';
-import { colors } from '@/styles/commonStyles';
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useCreatorData } from '@/hooks/useCreatorData';
 import { IconSymbol } from '@/components/IconSymbol';
-import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
-import * as Clipboard from 'expo-clipboard';
 import { Stack, useRouter } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
+import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 import {
   View,
   Text,
@@ -23,6 +20,9 @@ import {
   Easing,
   Modal,
 } from 'react-native';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { supabase } from '@/app/integrations/supabase/client';
+import { colors } from '@/styles/commonStyles';
 
 interface ManagerIdentity {
   id: string;
@@ -89,11 +89,10 @@ const CREATOR_HANDLE = 'camilocossio';
 const SILVER_THRESHOLD = 200000;
 const GOLD_THRESHOLD = 500000;
 const SILVER_PAYOUT = 100;
-const GOLD_PAYOUT = 250;
+const GOLD_PAYOUT = 200;
 
-export default function ManagerPortalScreen() {
+function ManagerPortalScreen() {
   const router = useRouter();
-  const { creator, creatorLoading } = useCreatorData();
   const [fontsLoaded] = useFonts({
     Poppins_400Regular,
     Poppins_500Medium,
@@ -101,190 +100,214 @@ export default function ManagerPortalScreen() {
     Poppins_700Bold,
   });
 
+  const { creator, loading: creatorLoading } = useCreatorData(CREATOR_HANDLE);
+
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [managerIdentity, setManagerIdentity] = useState<ManagerIdentity | null>(null);
+  const [isManagerUser, setIsManagerUser] = useState(false);
+  const [assignedCreators, setAssignedCreators] = useState<AssignedCreator[]>([]);
+  const [managerRankings, setManagerRankings] = useState<ManagerRanking[]>([]);
   const [activeTab, setActiveTab] = useState<TabOption>('creators');
   const [statusFilter, setStatusFilter] = useState<CreatorStatusTab>('all');
   const [battleFilter, setBattleFilter] = useState<FilterBattle>('all');
   const [payoutFilter, setPayoutFilter] = useState<FilterPayout>('all');
   const [searchQuery, setSearchQuery] = useState('');
-
-  const [managerIdentity, setManagerIdentity] = useState<ManagerIdentity | null>(null);
-  const [assignedCreators, setAssignedCreators] = useState<AssignedCreator[]>([]);
-  const [rankings, setRankings] = useState<ManagerRanking[]>([]);
-  const [stats, setStats] = useState<ManagerStats>({
-    totalCreators: 0,
-    totalRookies: 0,
-    totalSilver: 0,
-    totalGold: 0,
-    collectiveDiamonds: 0,
-    creatorsBookedBattle: 0,
-    creatorsMissingBattle: 0,
-  });
-
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [editedWhatsAppLink, setEditedWhatsAppLink] = useState('');
 
+  // Fetch manager data and validate manager status
   useEffect(() => {
-    if (creator && !creatorLoading) {
-      fetchManagerPortalData();
+    const fetchManagerData = async () => {
+      if (!creator?.creator_handle) {
+        console.log('No creator handle available');
+        return;
+      }
+      
+      setLoading(true);
+      try {
+        console.log('Fetching manager data for:', creator.creator_handle);
+        
+        // Query managers table joined with users table
+        const { data: managerData, error: managerError } = await supabase
+          .from('managers')
+          .select(`
+            id,
+            user_id,
+            tiktok_handle,
+            promoted_to_manager_at,
+            whatsapp,
+            whatsapp_group_link,
+            avatar_url,
+            language_preference,
+            users!inner (
+              first_name,
+              last_name,
+              email,
+              avatar_url
+            )
+          `)
+          .eq('tiktok_handle', creator.creator_handle)
+          .maybeSingle();
+
+        if (managerError) {
+          console.error('Manager query error:', managerError);
+        }
+
+        console.log('Manager data received:', managerData);
+
+        // Check if user is a manager - must have a record AND promoted_to_manager_at is not null
+        const isManager = managerData && managerData.promoted_to_manager_at !== null;
+        
+        console.log('Is manager:', isManager);
+        console.log('Promoted at:', managerData?.promoted_to_manager_at);
+
+        if (managerData && isManager) {
+          // Flatten the joined user data
+          const flattenedData: ManagerIdentity = {
+            id: managerData.id,
+            user_id: managerData.user_id,
+            first_name: (managerData.users as any).first_name,
+            last_name: (managerData.users as any).last_name,
+            email: (managerData.users as any).email,
+            avatar_url: managerData.avatar_url || (managerData.users as any).avatar_url,
+            whatsapp: managerData.whatsapp,
+            tiktok_handle: managerData.tiktok_handle,
+            promoted_to_manager_at: managerData.promoted_to_manager_at,
+            manager_avatar_url: managerData.avatar_url,
+            regions_managed: [],
+            languages: [],
+            whatsapp_group_link: managerData.whatsapp_group_link,
+            language_preference: managerData.language_preference,
+          };
+
+          setManagerIdentity(flattenedData);
+          setEditedWhatsAppLink(flattenedData.whatsapp_group_link || '');
+        }
+        
+        setIsManagerUser(isManager);
+
+        if (isManager) {
+          // Fetch assigned creators and other manager data
+          await fetchAssignedCreators();
+          await fetchManagerRankings();
+        }
+      } catch (err) {
+        console.error('Error fetching manager data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (!creatorLoading) {
+      fetchManagerData();
     }
   }, [creator, creatorLoading]);
 
+  const fetchAssignedCreators = async () => {
+    try {
+      if (!managerIdentity?.id) return;
+
+      const { data, error } = await supabase
+        .from('creators')
+        .select('*')
+        .eq('assigned_manager_id', managerIdentity.id)
+        .order('diamonds_monthly', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching assigned creators:', error);
+        return;
+      }
+
+      setAssignedCreators(data || []);
+    } catch (err) {
+      console.error('Error in fetchAssignedCreators:', err);
+    }
+  };
+
+  const fetchManagerRankings = async () => {
+    try {
+      // Fetch top 10 managers by graduated creators count
+      const { data, error } = await supabase
+        .from('managers')
+        .select(`
+          id,
+          tiktok_handle,
+          avatar_url,
+          users!inner (
+            first_name,
+            last_name
+          )
+        `)
+        .not('promoted_to_manager_at', 'is', null)
+        .limit(10);
+
+      if (error) {
+        console.error('Error fetching manager rankings:', error);
+        return;
+      }
+
+      // Transform the data
+      const rankings: ManagerRanking[] = (data || []).map((manager: any) => ({
+        id: manager.id,
+        first_name: manager.users.first_name,
+        last_name: manager.users.last_name,
+        graduated_creators: 0, // TODO: Calculate from creators table
+        tiktok_handle: manager.tiktok_handle,
+        avatar_url: manager.avatar_url,
+      }));
+
+      setManagerRankings(rankings);
+    } catch (err) {
+      console.error('Error in fetchManagerRankings:', err);
+    }
+  };
+
   useEffect(() => {
-    if (activeTab === 'rankings' && rankings.length === 0) {
-      fetchRankings();
+    if (isManagerUser && managerIdentity) {
+      fetchAssignedCreators();
     }
   }, [activeTab]);
 
-  const fetchManagerPortalData = useCallback(async () => {
-    try {
-      setLoading(true);
-      console.log('[Manager Portal] Fetching data for creator:', creator?.creator_handle);
-
-      // Fetch manager identity
-      const { data: managerData, error: managerError } = await supabase
-        .from('manager_identities')
-        .select('*')
-        .eq('user_id', creator?.id)
-        .single();
-
-      if (managerError) {
-        console.error('[Manager Portal] Error fetching manager identity:', managerError);
-        throw managerError;
-      }
-
-      console.log('[Manager Portal] Manager identity:', managerData);
-      setManagerIdentity(managerData);
-      setEditedWhatsAppLink(managerData?.whatsapp_group_link || '');
-
-      // Fetch assigned creators
-      const { data: creatorsData, error: creatorsError } = await supabase
-        .from('manager_creator_assignments')
-        .select(`
-          id,
-          assigned_at,
-          was_graduated_at_assignment,
-          creator:creator_profiles!manager_creator_assignments_creator_id_fkey (
-            id,
-            first_name,
-            last_name,
-            creator_handle,
-            email,
-            region,
-            graduation_status,
-            total_diamonds,
-            diamonds_monthly,
-            phone,
-            avatar_url,
-            profile_picture_url,
-            battle_booked,
-            graduation_eligible,
-            graduation_paid_this_month
-          )
-        `)
-        .eq('manager_id', managerData.id);
-
-      if (creatorsError) {
-        console.error('[Manager Portal] Error fetching creators:', creatorsError);
-        throw creatorsError;
-      }
-
-      console.log('[Manager Portal] Assigned creators:', creatorsData);
-
-      const formattedCreators: AssignedCreator[] = creatorsData.map((assignment: any) => ({
-        id: assignment.creator.id,
-        first_name: assignment.creator.first_name,
-        last_name: assignment.creator.last_name,
-        creator_handle: assignment.creator.creator_handle,
-        email: assignment.creator.email,
-        region: assignment.creator.region,
-        graduation_status: assignment.creator.graduation_status,
-        total_diamonds: assignment.creator.total_diamonds || 0,
-        diamonds_monthly: assignment.creator.diamonds_monthly || 0,
-        phone: assignment.creator.phone,
-        avatar_url: assignment.creator.avatar_url,
-        profile_picture_url: assignment.creator.profile_picture_url,
-        battle_booked: assignment.creator.battle_booked || false,
-        graduation_eligible: assignment.creator.graduation_eligible || false,
-        graduation_paid_this_month: assignment.creator.graduation_paid_this_month || false,
-        was_graduated_at_assignment: assignment.was_graduated_at_assignment || false,
-        assigned_at: assignment.assigned_at,
-      }));
-
-      setAssignedCreators(formattedCreators);
-
-      // Calculate stats
-      const totalCreators = formattedCreators.length;
-      const totalRookies = formattedCreators.filter(c => 
-        c.diamonds_monthly < SILVER_THRESHOLD
-      ).length;
-      const totalSilver = formattedCreators.filter(c => 
-        c.diamonds_monthly >= SILVER_THRESHOLD && c.diamonds_monthly < GOLD_THRESHOLD
-      ).length;
-      const totalGold = formattedCreators.filter(c => 
-        c.diamonds_monthly >= GOLD_THRESHOLD
-      ).length;
-      const collectiveDiamonds = formattedCreators.reduce((sum, c) => sum + c.diamonds_monthly, 0);
-      const creatorsBookedBattle = formattedCreators.filter(c => c.battle_booked).length;
-      const creatorsMissingBattle = formattedCreators.filter(c => !c.battle_booked).length;
-
-      setStats({
-        totalCreators,
-        totalRookies,
-        totalSilver,
-        totalGold,
-        collectiveDiamonds,
-        creatorsBookedBattle,
-        creatorsMissingBattle,
-      });
-
-    } catch (error) {
-      console.error('[Manager Portal] Error:', error);
-      Alert.alert('Error', 'Failed to load manager portal data');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [creator]);
-
-  const fetchRankings = useCallback(async () => {
-    try {
-      console.log('[Manager Portal] Fetching rankings...');
-
-      const { data: rankingsData, error: rankingsError } = await supabase
-        .rpc('get_manager_rankings');
-
-      if (rankingsError) {
-        console.error('[Manager Portal] Error fetching rankings:', rankingsError);
-        throw rankingsError;
-      }
-
-      console.log('[Manager Portal] Rankings data:', rankingsData);
-      setRankings(rankingsData || []);
-    } catch (error) {
-      console.error('[Manager Portal] Error fetching rankings:', error);
-    }
-  }, []);
-
-  const onRefresh = useCallback(() => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    fetchManagerPortalData();
-    if (activeTab === 'rankings') {
-      fetchRankings();
+    if (isManagerUser && managerIdentity) {
+      await fetchAssignedCreators();
+      await fetchManagerRankings();
     }
-  }, [fetchManagerPortalData, fetchRankings, activeTab]);
+    setRefreshing(false);
+  }, [isManagerUser, managerIdentity]);
+
+  const stats: ManagerStats = useMemo(() => {
+    const totalCreators = assignedCreators.length;
+    const totalRookies = assignedCreators.filter(c => (c.diamonds_monthly || 0) < SILVER_THRESHOLD).length;
+    const totalSilver = assignedCreators.filter(c => (c.diamonds_monthly || 0) >= SILVER_THRESHOLD && (c.diamonds_monthly || 0) < GOLD_THRESHOLD).length;
+    const totalGold = assignedCreators.filter(c => (c.diamonds_monthly || 0) >= GOLD_THRESHOLD).length;
+    const collectiveDiamonds = assignedCreators.reduce((sum, c) => sum + (c.diamonds_monthly || 0), 0);
+    const creatorsBookedBattle = assignedCreators.filter(c => c.battle_booked).length;
+    const creatorsMissingBattle = totalCreators - creatorsBookedBattle;
+
+    return {
+      totalCreators,
+      totalRookies,
+      totalSilver,
+      totalGold,
+      collectiveDiamonds,
+      creatorsBookedBattle,
+      creatorsMissingBattle,
+    };
+  }, [assignedCreators]);
 
   const filteredCreators = useMemo(() => {
     let filtered = [...assignedCreators];
 
     // Status filter
     if (statusFilter === 'rookie') {
-      filtered = filtered.filter(c => c.diamonds_monthly < SILVER_THRESHOLD);
+      filtered = filtered.filter(c => (c.diamonds_monthly || 0) < SILVER_THRESHOLD);
     } else if (statusFilter === 'silver') {
-      filtered = filtered.filter(c => c.diamonds_monthly >= SILVER_THRESHOLD && c.diamonds_monthly < GOLD_THRESHOLD);
+      filtered = filtered.filter(c => (c.diamonds_monthly || 0) >= SILVER_THRESHOLD && (c.diamonds_monthly || 0) < GOLD_THRESHOLD);
     } else if (statusFilter === 'gold') {
-      filtered = filtered.filter(c => c.diamonds_monthly >= GOLD_THRESHOLD);
+      filtered = filtered.filter(c => (c.diamonds_monthly || 0) >= GOLD_THRESHOLD);
     }
 
     // Battle filter
@@ -305,10 +328,10 @@ export default function ManagerPortalScreen() {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(c =>
-        c.first_name.toLowerCase().includes(query) ||
-        c.last_name.toLowerCase().includes(query) ||
-        c.creator_handle.toLowerCase().includes(query) ||
-        c.email.toLowerCase().includes(query)
+        c.first_name?.toLowerCase().includes(query) ||
+        c.last_name?.toLowerCase().includes(query) ||
+        c.creator_handle?.toLowerCase().includes(query) ||
+        c.email?.toLowerCase().includes(query)
       );
     }
 
@@ -316,26 +339,24 @@ export default function ManagerPortalScreen() {
   }, [assignedCreators, statusFilter, battleFilter, payoutFilter, searchQuery]);
 
   const handleTikTokPress = (handle: string) => {
-    const url = `https://www.tiktok.com/@${handle}`;
-    Linking.openURL(url);
+    Linking.openURL(`https://www.tiktok.com/@${handle}`);
   };
 
   const handleWhatsAppPress = (phone: string) => {
-    const url = `https://wa.me/${phone.replace(/\D/g, '')}`;
-    Linking.openURL(url);
+    if (!phone) return;
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    Linking.openURL(`https://wa.me/${cleanPhone}`);
   };
 
   const handleWhatsAppGroupPress = () => {
     if (managerIdentity?.whatsapp_group_link) {
-      Linking.openURL(managerIdentity.whatsapp_group_link);
+      Clipboard.setStringAsync(managerIdentity.whatsapp_group_link);
+      Alert.alert('Copied!', 'WhatsApp group link copied to clipboard');
     }
   };
 
   const handleCreatorCardPress = (creatorId: string) => {
-    router.push({
-      pathname: '/(tabs)/creator-detail',
-      params: { creatorId },
-    });
+    router.push(`/creator-detail?creatorId=${creatorId}`);
   };
 
   const handleRankingCardPress = (tiktokHandle: string | null) => {
@@ -345,15 +366,15 @@ export default function ManagerPortalScreen() {
   };
 
   const handleEditPress = () => {
-    setIsEditMode(true);
+    setIsEditModalVisible(true);
   };
 
   const handleSaveEdit = async () => {
-    try {
-      if (!managerIdentity) return;
+    if (!managerIdentity) return;
 
+    try {
       const { error } = await supabase
-        .from('manager_identities')
+        .from('managers')
         .update({ whatsapp_group_link: editedWhatsAppLink })
         .eq('id', managerIdentity.id);
 
@@ -363,11 +384,12 @@ export default function ManagerPortalScreen() {
         ...managerIdentity,
         whatsapp_group_link: editedWhatsAppLink,
       });
-      setIsEditMode(false);
+
       Alert.alert('Success', 'WhatsApp group link updated');
-    } catch (error) {
-      console.error('[Manager Portal] Error updating WhatsApp link:', error);
-      Alert.alert('Error', 'Failed to update WhatsApp group link');
+      setIsEditModalVisible(false);
+    } catch (err) {
+      console.error('Error updating WhatsApp link:', err);
+      Alert.alert('Error', 'Failed to update WhatsApp link');
     }
   };
 
@@ -379,22 +401,24 @@ export default function ManagerPortalScreen() {
 
   const getGraduationBadgeColor = (status: string | null) => {
     if (!status) return colors.textSecondary;
-    if (status.toLowerCase().includes('gold')) return '#FFD700';
-    if (status.toLowerCase().includes('silver')) return '#C0C0C0';
-    return colors.primary;
+    const lowerStatus = status.toLowerCase();
+    if (lowerStatus.includes('gold')) return '#FFD700';
+    if (lowerStatus.includes('silver')) return '#C0C0C0';
+    return colors.textSecondary;
   };
 
   const getGraduationLevel = (status: string | null): 'rookie' | 'silver' | 'gold' => {
     if (!status) return 'rookie';
-    if (status.toLowerCase().includes('gold')) return 'gold';
-    if (status.toLowerCase().includes('silver')) return 'silver';
+    const lowerStatus = status.toLowerCase();
+    if (lowerStatus.includes('gold')) return 'gold';
+    if (lowerStatus.includes('silver')) return 'silver';
     return 'rookie';
   };
 
   const getDiamondsToNextGraduation = (monthlyDiamonds: number, currentLevel: 'rookie' | 'silver' | 'gold') => {
     if (currentLevel === 'gold') return 0;
-    if (currentLevel === 'silver') return GOLD_THRESHOLD - monthlyDiamonds;
-    return SILVER_THRESHOLD - monthlyDiamonds;
+    if (currentLevel === 'silver') return Math.max(0, GOLD_THRESHOLD - monthlyDiamonds);
+    return Math.max(0, SILVER_THRESHOLD - monthlyDiamonds);
   };
 
   const getNextGraduationTarget = (currentLevel: 'rookie' | 'silver' | 'gold') => {
@@ -411,7 +435,7 @@ export default function ManagerPortalScreen() {
     return Math.min(100, (monthlyDiamonds / SILVER_THRESHOLD) * 100);
   };
 
-  if (!fontsLoaded || loading) {
+  if (!fontsLoaded || creatorLoading || loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -419,20 +443,28 @@ export default function ManagerPortalScreen() {
     );
   }
 
-  if (!managerIdentity) {
+  if (!isManagerUser) {
     return (
       <View style={styles.container}>
         <Stack.Screen
           options={{
+            headerShown: true,
             title: 'Manager Portal',
             headerStyle: { backgroundColor: colors.background },
             headerTintColor: colors.text,
           }}
         />
-        <View style={styles.emptyContainer}>
-          <IconSymbol ios_icon_name="person.crop.circle.badge.xmark" android_material_icon_name="person-off" size={64} color={colors.textSecondary} />
-          <Text style={styles.emptyText}>You are not a manager</Text>
-          <Text style={styles.emptySubtext}>Contact support to become a manager</Text>
+        <View style={styles.notManagerContainer}>
+          <IconSymbol
+            ios_icon_name="exclamationmark.triangle"
+            android_material_icon_name="warning"
+            size={64}
+            color={colors.textSecondary}
+          />
+          <Text style={styles.notManagerTitle}>Not a Manager</Text>
+          <Text style={styles.notManagerText}>
+            You are not a manager. This portal is only accessible to users with manager privileges.
+          </Text>
         </View>
       </View>
     );
@@ -442,9 +474,20 @@ export default function ManagerPortalScreen() {
     <View style={styles.container}>
       <Stack.Screen
         options={{
+          headerShown: true,
           title: 'Manager Portal',
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,
+          headerRight: () => (
+            <TouchableOpacity onPress={handleEditPress} style={styles.editButton}>
+              <IconSymbol
+                ios_icon_name="pencil"
+                android_material_icon_name="edit"
+                size={24}
+                color={colors.primary}
+              />
+            </TouchableOpacity>
+          ),
         }}
       />
 
@@ -458,62 +501,41 @@ export default function ManagerPortalScreen() {
         {/* Manager Info Card */}
         <View style={styles.managerCard}>
           <View style={styles.managerHeader}>
-            {managerIdentity.avatar_url ? (
-              <Image
-                source={{ uri: managerIdentity.avatar_url }}
-                style={styles.managerAvatar}
-              />
+            {managerIdentity?.avatar_url ? (
+              <Image source={{ uri: managerIdentity.avatar_url }} style={styles.managerAvatar} />
             ) : (
               <View style={[styles.managerAvatar, styles.avatarPlaceholder]}>
-                <IconSymbol ios_icon_name="person.circle.fill" android_material_icon_name="account-circle" size={40} color={colors.textSecondary} />
+                <IconSymbol
+                  ios_icon_name="person.circle"
+                  android_material_icon_name="person"
+                  size={40}
+                  color={colors.textSecondary}
+                />
               </View>
             )}
             <View style={styles.managerInfo}>
               <Text style={styles.managerName}>
-                {managerIdentity.first_name} {managerIdentity.last_name}
+                {managerIdentity?.first_name} {managerIdentity?.last_name}
               </Text>
-              {managerIdentity.tiktok_handle && (
+              <Text style={styles.managerEmail}>{managerIdentity?.email}</Text>
+              {managerIdentity?.tiktok_handle && (
                 <TouchableOpacity onPress={() => handleTikTokPress(managerIdentity.tiktok_handle!)}>
                   <Text style={styles.managerHandle}>@{managerIdentity.tiktok_handle}</Text>
                 </TouchableOpacity>
               )}
-              <Text style={styles.managerEmail}>{managerIdentity.email}</Text>
             </View>
           </View>
 
-          {/* WhatsApp Group Link */}
-          {isEditMode ? (
-            <View style={styles.editContainer}>
-              <TextInput
-                style={styles.editInput}
-                value={editedWhatsAppLink}
-                onChangeText={setEditedWhatsAppLink}
-                placeholder="WhatsApp Group Link"
-                placeholderTextColor={colors.textSecondary}
+          {managerIdentity?.whatsapp_group_link && (
+            <TouchableOpacity style={styles.whatsappButton} onPress={handleWhatsAppGroupPress}>
+              <IconSymbol
+                ios_icon_name="link"
+                android_material_icon_name="link"
+                size={20}
+                color="#FFFFFF"
               />
-              <View style={styles.editButtons}>
-                <TouchableOpacity style={styles.cancelButton} onPress={() => setIsEditMode(false)}>
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.saveButton} onPress={handleSaveEdit}>
-                  <Text style={styles.saveButtonText}>Save</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.whatsappContainer}>
-              {managerIdentity.whatsapp_group_link ? (
-                <TouchableOpacity style={styles.whatsappButton} onPress={handleWhatsAppGroupPress}>
-                  <IconSymbol ios_icon_name="message.fill" android_material_icon_name="chat" size={20} color="#fff" />
-                  <Text style={styles.whatsappButtonText}>WhatsApp Group</Text>
-                </TouchableOpacity>
-              ) : (
-                <Text style={styles.noWhatsappText}>No WhatsApp group link set</Text>
-              )}
-              <TouchableOpacity style={styles.editButton} onPress={handleEditPress}>
-                <IconSymbol ios_icon_name="pencil" android_material_icon_name="edit" size={20} color={colors.primary} />
-              </TouchableOpacity>
-            </View>
+              <Text style={styles.whatsappButtonText}>Copy WhatsApp Group Link</Text>
+            </TouchableOpacity>
           )}
         </View>
 
@@ -525,7 +547,7 @@ export default function ManagerPortalScreen() {
           </View>
           <View style={styles.statCard}>
             <Text style={styles.statValue}>{stats.collectiveDiamonds.toLocaleString()}</Text>
-            <Text style={styles.statLabel}>Collective 💎</Text>
+            <Text style={styles.statLabel}>Collective Diamonds</Text>
           </View>
           <View style={styles.statCard}>
             <Text style={styles.statValue}>{stats.totalRookies}</Text>
@@ -546,7 +568,7 @@ export default function ManagerPortalScreen() {
         </View>
 
         {/* Tab Selector */}
-        <View style={styles.tabSelector}>
+        <View style={styles.tabContainer}>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'creators' && styles.activeTab]}
             onPress={() => setActiveTab('creators')}
@@ -565,12 +587,16 @@ export default function ManagerPortalScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Creators Tab */}
-        {activeTab === 'creators' && (
+        {activeTab === 'creators' ? (
           <>
             {/* Search Bar */}
             <View style={styles.searchContainer}>
-              <IconSymbol ios_icon_name="magnifyingglass" android_material_icon_name="search" size={20} color={colors.textSecondary} />
+              <IconSymbol
+                ios_icon_name="magnifyingglass"
+                android_material_icon_name="search"
+                size={20}
+                color={colors.textSecondary}
+              />
               <TextInput
                 style={styles.searchInput}
                 placeholder="Search creators..."
@@ -582,187 +608,184 @@ export default function ManagerPortalScreen() {
 
             {/* Filters */}
             <View style={styles.filtersContainer}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <TouchableOpacity
-                  style={[styles.filterChip, statusFilter === 'all' && styles.activeFilterChip]}
+                  style={[styles.filterChip, statusFilter === 'all' && styles.filterChipActive]}
                   onPress={() => setStatusFilter('all')}
                 >
-                  <Text style={[styles.filterChipText, statusFilter === 'all' && styles.activeFilterChipText]}>
+                  <Text style={[styles.filterChipText, statusFilter === 'all' && styles.filterChipTextActive]}>
                     All
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.filterChip, statusFilter === 'rookie' && styles.activeFilterChip]}
+                  style={[styles.filterChip, statusFilter === 'rookie' && styles.filterChipActive]}
                   onPress={() => setStatusFilter('rookie')}
                 >
-                  <Text style={[styles.filterChipText, statusFilter === 'rookie' && styles.activeFilterChipText]}>
+                  <Text style={[styles.filterChipText, statusFilter === 'rookie' && styles.filterChipTextActive]}>
                     Rookie
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.filterChip, statusFilter === 'silver' && styles.activeFilterChip]}
+                  style={[styles.filterChip, statusFilter === 'silver' && styles.filterChipActive]}
                   onPress={() => setStatusFilter('silver')}
                 >
-                  <Text style={[styles.filterChipText, statusFilter === 'silver' && styles.activeFilterChipText]}>
+                  <Text style={[styles.filterChipText, statusFilter === 'silver' && styles.filterChipTextActive]}>
                     Silver
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.filterChip, statusFilter === 'gold' && styles.activeFilterChip]}
+                  style={[styles.filterChip, statusFilter === 'gold' && styles.filterChipActive]}
                   onPress={() => setStatusFilter('gold')}
                 >
-                  <Text style={[styles.filterChipText, statusFilter === 'gold' && styles.activeFilterChipText]}>
+                  <Text style={[styles.filterChipText, statusFilter === 'gold' && styles.filterChipTextActive]}>
                     Gold
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.filterChip, battleFilter === 'booked' && styles.activeFilterChip]}
-                  onPress={() => setBattleFilter(battleFilter === 'booked' ? 'all' : 'booked')}
-                >
-                  <Text style={[styles.filterChipText, battleFilter === 'booked' && styles.activeFilterChipText]}>
-                    Battle Booked
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.filterChip, battleFilter === 'missing' && styles.activeFilterChip]}
-                  onPress={() => setBattleFilter(battleFilter === 'missing' ? 'all' : 'missing')}
-                >
-                  <Text style={[styles.filterChipText, battleFilter === 'missing' && styles.activeFilterChipText]}>
-                    No Battle
                   </Text>
                 </TouchableOpacity>
               </ScrollView>
             </View>
 
             {/* Creators List */}
-            <View style={styles.creatorsContainer}>
-              {filteredCreators.length === 0 ? (
-                <View style={styles.emptyContainer}>
-                  <IconSymbol ios_icon_name="person.crop.circle.badge.questionmark" android_material_icon_name="person-search" size={48} color={colors.textSecondary} />
-                  <Text style={styles.emptyText}>No creators found</Text>
-                </View>
-              ) : (
-                filteredCreators.map((creator, index) => {
-                  const currentLevel = getGraduationLevel(creator.graduation_status);
-                  const nextTarget = getNextGraduationTarget(currentLevel);
-                  const remaining = getDiamondsToNextGraduation(creator.diamonds_monthly, currentLevel);
-                  const progress = getProgressPercentage(creator.diamonds_monthly, currentLevel);
-
-                  return (
-                    <TouchableOpacity
-                      key={creator.id}
-                      style={styles.creatorCard}
-                      onPress={() => handleCreatorCardPress(creator.id)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.creatorHeader}>
-                        {creator.avatar_url || creator.profile_picture_url ? (
-                          <Image
-                            source={{ uri: creator.avatar_url || creator.profile_picture_url || '' }}
-                            style={styles.creatorAvatar}
-                          />
-                        ) : (
-                          <View style={[styles.creatorAvatar, styles.avatarPlaceholder]}>
-                            <IconSymbol ios_icon_name="person.circle.fill" android_material_icon_name="account-circle" size={24} color={colors.textSecondary} />
-                          </View>
-                        )}
-                        <View style={styles.creatorInfo}>
-                          <Text style={styles.creatorName}>
-                            {creator.first_name} {creator.last_name}
-                          </Text>
-                          <TouchableOpacity onPress={() => handleTikTokPress(creator.creator_handle)}>
-                            <Text style={styles.creatorHandle}>@{creator.creator_handle}</Text>
-                          </TouchableOpacity>
-                        </View>
-                        <View style={styles.creatorActions}>
-                          {creator.phone && (
-                            <TouchableOpacity
-                              style={styles.actionButton}
-                              onPress={() => handleWhatsAppPress(creator.phone!)}
-                            >
-                              <IconSymbol ios_icon_name="message.fill" android_material_icon_name="chat" size={20} color={colors.primary} />
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      </View>
-
-                      <View style={styles.creatorStats}>
-                        <View style={styles.statItem}>
-                          <Text style={styles.statItemValue}>{creator.diamonds_monthly.toLocaleString()}</Text>
-                          <Text style={styles.statItemLabel}>Monthly 💎</Text>
-                        </View>
-                        <View style={styles.statItem}>
-                          <View style={[styles.badge, { backgroundColor: getGraduationBadgeColor(creator.graduation_status) }]}>
-                            <Text style={styles.badgeText}>{currentLevel.toUpperCase()}</Text>
-                          </View>
-                        </View>
-                        <View style={styles.statItem}>
-                          {creator.battle_booked ? (
-                            <IconSymbol ios_icon_name="checkmark.circle.fill" android_material_icon_name="check-circle" size={24} color="#4CAF50" />
-                          ) : (
-                            <IconSymbol ios_icon_name="xmark.circle.fill" android_material_icon_name="cancel" size={24} color="#F44336" />
-                          )}
-                          <Text style={styles.statItemLabel}>Battle</Text>
-                        </View>
-                      </View>
-
-                      {currentLevel !== 'gold' && (
-                        <View style={styles.progressContainer}>
-                          <View style={styles.progressHeader}>
-                            <Text style={styles.progressLabel}>Next: {nextTarget}</Text>
-                            <Text style={styles.progressValue}>{remaining.toLocaleString()} 💎 to go</Text>
-                          </View>
-                          <View style={styles.progressBar}>
-                            <View style={[styles.progressFill, { width: `${progress}%` }]} />
-                          </View>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })
-              )}
-            </View>
-          </>
-        )}
-
-        {/* Rankings Tab */}
-        {activeTab === 'rankings' && (
-          <View style={styles.rankingsContainer}>
-            <Text style={styles.rankingsTitle}>Top 10 Managers</Text>
-            <Text style={styles.rankingsSubtitle}>Ranked by graduated creators</Text>
-
-            {rankings.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={styles.emptyText}>Loading rankings...</Text>
+            {filteredCreators.length === 0 ? (
+              <View style={styles.emptyState}>
+                <IconSymbol
+                  ios_icon_name="person.3"
+                  android_material_icon_name="group"
+                  size={64}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.emptyStateText}>No creators found</Text>
               </View>
             ) : (
-              rankings.slice(0, 10).map((manager, index) => (
+              filteredCreators.map((creator) => {
+                const currentLevel = getGraduationLevel(creator.graduation_status);
+                const diamondsToNext = getDiamondsToNextGraduation(creator.diamonds_monthly || 0, currentLevel);
+                const nextTarget = getNextGraduationTarget(currentLevel);
+                const progress = getProgressPercentage(creator.diamonds_monthly || 0, currentLevel);
+
+                return (
+                  <TouchableOpacity
+                    key={creator.id}
+                    style={styles.creatorCard}
+                    onPress={() => handleCreatorCardPress(creator.id)}
+                  >
+                    <View style={styles.creatorHeader}>
+                      {creator.avatar_url || creator.profile_picture_url ? (
+                        <Image
+                          source={{ uri: creator.avatar_url || creator.profile_picture_url || '' }}
+                          style={styles.creatorAvatar}
+                        />
+                      ) : (
+                        <View style={[styles.creatorAvatar, styles.avatarPlaceholder]}>
+                          <IconSymbol
+                            ios_icon_name="person.circle"
+                            android_material_icon_name="person"
+                            size={24}
+                            color={colors.textSecondary}
+                          />
+                        </View>
+                      )}
+                      <View style={styles.creatorInfo}>
+                        <Text style={styles.creatorName}>
+                          {creator.first_name} {creator.last_name}
+                        </Text>
+                        <TouchableOpacity onPress={() => handleTikTokPress(creator.creator_handle)}>
+                          <Text style={styles.creatorHandle}>@{creator.creator_handle}</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <View style={styles.creatorBadges}>
+                        {creator.battle_booked && (
+                          <View style={styles.badge}>
+                            <IconSymbol
+                              ios_icon_name="checkmark.circle"
+                              android_material_icon_name="check-circle"
+                              size={16}
+                              color="#4CAF50"
+                            />
+                          </View>
+                        )}
+                      </View>
+                    </View>
+
+                    <View style={styles.creatorStats}>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statItemValue}>{(creator.diamonds_monthly || 0).toLocaleString()}</Text>
+                        <Text style={styles.statItemLabel}>Monthly Diamonds</Text>
+                      </View>
+                      <View style={styles.statItem}>
+                        <Text style={[styles.statItemValue, { color: getGraduationBadgeColor(creator.graduation_status) }]}>
+                          {currentLevel.toUpperCase()}
+                        </Text>
+                        <Text style={styles.statItemLabel}>Status</Text>
+                      </View>
+                    </View>
+
+                    {currentLevel !== 'gold' && (
+                      <View style={styles.progressContainer}>
+                        <View style={styles.progressHeader}>
+                          <Text style={styles.progressLabel}>Next: {nextTarget}</Text>
+                          <Text style={styles.progressValue}>{diamondsToNext.toLocaleString()} to go</Text>
+                        </View>
+                        <View style={styles.progressBar}>
+                          <View style={[styles.progressFill, { width: `${progress}%` }]} />
+                        </View>
+                      </View>
+                    )}
+
+                    {creator.phone && (
+                      <TouchableOpacity
+                        style={styles.contactButton}
+                        onPress={() => handleWhatsAppPress(creator.phone!)}
+                      >
+                        <IconSymbol
+                          ios_icon_name="message"
+                          android_material_icon_name="message"
+                          size={16}
+                          color={colors.primary}
+                        />
+                        <Text style={styles.contactButtonText}>WhatsApp</Text>
+                      </TouchableOpacity>
+                    )}
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </>
+        ) : (
+          <>
+            {/* Rankings List */}
+            <Text style={styles.sectionTitle}>Top 10 Managers</Text>
+            {managerRankings.length === 0 ? (
+              <View style={styles.emptyState}>
+                <IconSymbol
+                  ios_icon_name="chart.bar"
+                  android_material_icon_name="bar-chart"
+                  size={64}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.emptyStateText}>No rankings available</Text>
+              </View>
+            ) : (
+              managerRankings.map((manager, index) => (
                 <TouchableOpacity
                   key={manager.id}
                   style={styles.rankingCard}
                   onPress={() => handleRankingCardPress(manager.tiktok_handle)}
-                  activeOpacity={0.7}
                 >
-                  <View style={styles.rankingRank}>
-                    <Text style={styles.rankingRankText}>#{index + 1}</Text>
+                  <View style={styles.rankingBadge}>
+                    <Text style={styles.rankingNumber}>#{index + 1}</Text>
                   </View>
-
-                  {/* Use avatar_url from database, with proper fallback */}
                   {manager.avatar_url ? (
-                    <Image
-                      source={{ uri: manager.avatar_url }}
-                      style={styles.rankingAvatar}
-                      onError={(error) => {
-                        console.log('[Manager Portal] Image load error for manager:', manager.first_name, error.nativeEvent.error);
-                      }}
-                    />
+                    <Image source={{ uri: manager.avatar_url }} style={styles.rankingAvatar} />
                   ) : (
                     <View style={[styles.rankingAvatar, styles.avatarPlaceholder]}>
-                      <IconSymbol ios_icon_name="person.circle.fill" android_material_icon_name="account-circle" size={24} color={colors.textSecondary} />
+                      <IconSymbol
+                        ios_icon_name="person.circle"
+                        android_material_icon_name="person"
+                        size={24}
+                        color={colors.textSecondary}
+                      />
                     </View>
                   )}
-
                   <View style={styles.rankingInfo}>
                     <Text style={styles.rankingName}>
                       {manager.first_name} {manager.last_name}
@@ -771,17 +794,52 @@ export default function ManagerPortalScreen() {
                       <Text style={styles.rankingHandle}>@{manager.tiktok_handle}</Text>
                     )}
                   </View>
-
                   <View style={styles.rankingStats}>
-                    <Text style={styles.rankingGraduated}>{manager.graduated_creators}</Text>
+                    <Text style={styles.rankingValue}>{manager.graduated_creators}</Text>
                     <Text style={styles.rankingLabel}>Graduated</Text>
                   </View>
                 </TouchableOpacity>
               ))
             )}
-          </View>
+          </>
         )}
       </ScrollView>
+
+      {/* Edit Modal */}
+      <Modal
+        visible={isEditModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit WhatsApp Group Link</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Enter WhatsApp group link"
+              placeholderTextColor={colors.textSecondary}
+              value={editedWhatsAppLink}
+              onChangeText={setEditedWhatsAppLink}
+              multiline
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setIsEditModalVisible(false)}
+              >
+                <Text style={styles.modalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSave]}
+                onPress={handleSaveEdit}
+              >
+                <Text style={[styles.modalButtonText, styles.modalButtonTextSave]}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -797,30 +855,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.background,
   },
+  notManagerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  notManagerTitle: {
+    fontSize: 24,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.text,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  notManagerText: {
+    fontSize: 16,
+    fontFamily: 'Poppins_400Regular',
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 100,
   },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.text,
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    fontFamily: 'Poppins_400Regular',
-    color: colors.textSecondary,
-    marginTop: 8,
+  editButton: {
+    marginRight: 16,
   },
   managerCard: {
     backgroundColor: colors.card,
@@ -853,86 +915,30 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 4,
   },
+  managerEmail: {
+    fontSize: 14,
+    fontFamily: 'Poppins_400Regular',
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
   managerHandle: {
     fontSize: 14,
     fontFamily: 'Poppins_500Medium',
     color: colors.primary,
-    marginBottom: 4,
-  },
-  managerEmail: {
-    fontSize: 12,
-    fontFamily: 'Poppins_400Regular',
-    color: colors.textSecondary,
-  },
-  whatsappContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
   },
   whatsappButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#25D366',
     borderRadius: 12,
     padding: 12,
-    marginRight: 8,
+    gap: 8,
   },
   whatsappButtonText: {
     fontSize: 14,
     fontFamily: 'Poppins_600SemiBold',
-    color: '#fff',
-    marginLeft: 8,
-  },
-  noWhatsappText: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: 'Poppins_400Regular',
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  editButton: {
-    padding: 12,
-  },
-  editContainer: {
-    marginTop: 8,
-  },
-  editInput: {
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 14,
-    fontFamily: 'Poppins_400Regular',
-    color: colors.text,
-    marginBottom: 12,
-  },
-  editButtons: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 8,
-  },
-  cancelButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: colors.border,
-  },
-  cancelButtonText: {
-    fontSize: 14,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.text,
-  },
-  saveButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: colors.primary,
-  },
-  saveButtonText: {
-    fontSize: 14,
-    fontFamily: 'Poppins_600SemiBold',
-    color: '#fff',
+    color: '#FFFFFF',
   },
   statsGrid: {
     flexDirection: 'row',
@@ -951,7 +957,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 24,
     fontFamily: 'Poppins_700Bold',
-    color: colors.text,
+    color: colors.primary,
     marginBottom: 4,
   },
   statLabel: {
@@ -960,7 +966,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
   },
-  tabSelector: {
+  tabContainer: {
     flexDirection: 'row',
     backgroundColor: colors.card,
     borderRadius: 12,
@@ -982,7 +988,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   activeTabText: {
-    color: '#fff',
+    color: '#FFFFFF',
   },
   searchContainer: {
     flexDirection: 'row',
@@ -990,20 +996,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: 12,
     padding: 12,
-    marginBottom: 12,
+    marginBottom: 16,
+    gap: 8,
   },
   searchInput: {
     flex: 1,
     fontSize: 14,
     fontFamily: 'Poppins_400Regular',
     color: colors.text,
-    marginLeft: 8,
   },
   filtersContainer: {
     marginBottom: 16,
-  },
-  filterScroll: {
-    flexGrow: 0,
   },
   filterChip: {
     paddingHorizontal: 16,
@@ -1012,24 +1015,33 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     marginRight: 8,
   },
-  activeFilterChip: {
+  filterChipActive: {
     backgroundColor: colors.primary,
   },
   filterChipText: {
-    fontSize: 12,
-    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    fontFamily: 'Poppins_500Medium',
     color: colors.textSecondary,
   },
-  activeFilterChipText: {
-    color: '#fff',
+  filterChipTextActive: {
+    color: '#FFFFFF',
   },
-  creatorsContainer: {
-    gap: 12,
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 48,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontFamily: 'Poppins_500Medium',
+    color: colors.textSecondary,
+    marginTop: 16,
   },
   creatorCard: {
     backgroundColor: colors.card,
     borderRadius: 16,
     padding: 16,
+    marginBottom: 12,
   },
   creatorHeader: {
     flexDirection: 'row',
@@ -1052,53 +1064,42 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   creatorHandle: {
-    fontSize: 12,
-    fontFamily: 'Poppins_500Medium',
+    fontSize: 14,
+    fontFamily: 'Poppins_400Regular',
     color: colors.primary,
   },
-  creatorActions: {
+  creatorBadges: {
     flexDirection: 'row',
     gap: 8,
   },
-  actionButton: {
-    padding: 8,
+  badge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   creatorStats: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    gap: 16,
+    marginBottom: 12,
   },
   statItem: {
-    alignItems: 'center',
+    flex: 1,
   },
   statItemValue: {
-    fontSize: 16,
+    fontSize: 18,
     fontFamily: 'Poppins_700Bold',
     color: colors.text,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   statItemLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontFamily: 'Poppins_400Regular',
     color: colors.textSecondary,
   },
-  badge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginBottom: 4,
-  },
-  badgeText: {
-    fontSize: 10,
-    fontFamily: 'Poppins_700Bold',
-    color: '#fff',
-  },
   progressContainer: {
-    marginTop: 12,
+    marginBottom: 12,
   },
   progressHeader: {
     flexDirection: 'row',
@@ -1107,39 +1108,44 @@ const styles = StyleSheet.create({
   },
   progressLabel: {
     fontSize: 12,
-    fontFamily: 'Poppins_600SemiBold',
+    fontFamily: 'Poppins_500Medium',
     color: colors.text,
   },
   progressValue: {
     fontSize: 12,
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins_400Regular',
     color: colors.textSecondary,
   },
   progressBar: {
-    height: 6,
+    height: 8,
     backgroundColor: colors.border,
-    borderRadius: 3,
+    borderRadius: 4,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     backgroundColor: colors.primary,
-    borderRadius: 3,
+    borderRadius: 4,
   },
-  rankingsContainer: {
-    gap: 12,
+  contactButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+    borderRadius: 8,
+    padding: 8,
+    gap: 6,
   },
-  rankingsTitle: {
-    fontSize: 24,
+  contactButtonText: {
+    fontSize: 12,
+    fontFamily: 'Poppins_600SemiBold',
+    color: colors.primary,
+  },
+  sectionTitle: {
+    fontSize: 20,
     fontFamily: 'Poppins_700Bold',
     color: colors.text,
-    marginBottom: 4,
-  },
-  rankingsSubtitle: {
-    fontSize: 14,
-    fontFamily: 'Poppins_400Regular',
-    color: colors.textSecondary,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   rankingCard: {
     flexDirection: 'row',
@@ -1147,25 +1153,27 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: 16,
     padding: 16,
-    gap: 12,
+    marginBottom: 12,
   },
-  rankingRank: {
+  rankingBadge: {
     width: 40,
     height: 40,
     borderRadius: 20,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 12,
   },
-  rankingRankText: {
+  rankingNumber: {
     fontSize: 16,
     fontFamily: 'Poppins_700Bold',
-    color: '#fff',
+    color: '#FFFFFF',
   },
   rankingAvatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
+    marginRight: 12,
   },
   rankingInfo: {
     flex: 1,
@@ -1177,22 +1185,79 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   rankingHandle: {
-    fontSize: 12,
-    fontFamily: 'Poppins_500Medium',
-    color: colors.primary,
-  },
-  rankingStats: {
-    alignItems: 'center',
-  },
-  rankingGraduated: {
-    fontSize: 20,
-    fontFamily: 'Poppins_700Bold',
-    color: colors.text,
-    marginBottom: 2,
-  },
-  rankingLabel: {
-    fontSize: 10,
+    fontSize: 14,
     fontFamily: 'Poppins_400Regular',
     color: colors.textSecondary,
   },
+  rankingStats: {
+    alignItems: 'flex-end',
+  },
+  rankingValue: {
+    fontSize: 20,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.primary,
+    marginBottom: 2,
+  },
+  rankingLabel: {
+    fontSize: 12,
+    fontFamily: 'Poppins_400Regular',
+    color: colors.textSecondary,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: 'Poppins_700Bold',
+    color: colors.text,
+    marginBottom: 16,
+  },
+  modalInput: {
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 14,
+    fontFamily: 'Poppins_400Regular',
+    color: colors.text,
+    marginBottom: 16,
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalButtonCancel: {
+    backgroundColor: colors.border,
+  },
+  modalButtonSave: {
+    backgroundColor: colors.primary,
+  },
+  modalButtonText: {
+    fontSize: 14,
+    fontFamily: 'Poppins_600SemiBold',
+    color: colors.text,
+  },
+  modalButtonTextSave: {
+    color: '#FFFFFF',
+  },
 });
+
+export default ManagerPortalScreen;
